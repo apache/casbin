@@ -40,8 +40,7 @@ var (
 	keyMatch5Re = regexp.MustCompile(`\{[^/]+\}`)
 	keyGet2Re1  = regexp.MustCompile(`:[^/]+`)
 	keyGet3Re1  = regexp.MustCompile(`\{[^/]+?\}`) // non-greedy match of `{...}` to support multiple {} in `/.../`
-	reCache     = map[string]*regexp.Regexp{}
-	reCacheMu   = sync.RWMutex{}
+	reCache     sync.Map                            // string -> *regexp.Regexp
 )
 
 // regexpMetaChars is exactly the set of characters that regexp.QuoteMeta escapes.
@@ -128,18 +127,13 @@ var (
 )
 
 func mustCompileOrGet(key string) *regexp.Regexp {
-	reCacheMu.RLock()
-	re, ok := reCache[key]
-	reCacheMu.RUnlock()
-
-	if !ok {
-		re = regexp.MustCompile(key)
-		reCacheMu.Lock()
-		reCache[key] = re
-		reCacheMu.Unlock()
+	if v, ok := reCache.Load(key); ok {
+		return v.(*regexp.Regexp)
 	}
 
-	return re
+	re := regexp.MustCompile(key)
+	actual, _ := reCache.LoadOrStore(key, re)
+	return actual.(*regexp.Regexp)
 }
 
 // validate the variadic parameter size and type as string.
