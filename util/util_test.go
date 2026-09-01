@@ -279,3 +279,63 @@ func TestEscapeStringLiterals(t *testing.T) {
 	testEscapeStringLiterals(t, `'hello'`, `'hello'`)
 	testEscapeStringLiterals(t, `"world"`, `"world"`)
 }
+
+// The Set* comparisons answer a question about their arguments and must not
+// rewrite them. They used to sort in place, and since the enforcer hands back
+// slices that alias its own policy, comparing an answer permuted the stored
+// rule - see the enforcer level regression test TestSet2DEqualsKeepsPolicyIntact.
+func TestSetComparisonsDoNotModifyArguments(t *testing.T) {
+	strs := []string{"c", "a", "b"}
+	other := []string{"b", "c", "a"}
+	if !SetEquals(strs, other) {
+		t.Error("SetEquals should hold for the same members in another order")
+	}
+	if !ArrayEquals(strs, []string{"c", "a", "b"}) {
+		t.Errorf("SetEquals reordered its first argument: %v", strs)
+	}
+	if !ArrayEquals(other, []string{"b", "c", "a"}) {
+		t.Errorf("SetEquals reordered its second argument: %v", other)
+	}
+
+	ints := []int{3, 1, 2}
+	otherInts := []int{2, 3, 1}
+	if !SetEqualsInt(ints, otherInts) {
+		t.Error("SetEqualsInt should hold for the same members in another order")
+	}
+	if ints[0] != 3 || ints[1] != 1 || ints[2] != 2 {
+		t.Errorf("SetEqualsInt reordered its first argument: %v", ints)
+	}
+	if otherInts[0] != 2 || otherInts[1] != 3 || otherInts[2] != 1 {
+		t.Errorf("SetEqualsInt reordered its second argument: %v", otherInts)
+	}
+
+	rules := [][]string{{"zoe", "data1", "read"}, {"amy", "data2", "write"}}
+	want := [][]string{{"amy", "data2", "write"}, {"zoe", "data1", "read"}}
+	if !Set2DEquals(rules, want) {
+		t.Error("Set2DEquals should hold for the same rules in another order")
+	}
+	if !ArrayEquals(rules[0], []string{"zoe", "data1", "read"}) {
+		t.Errorf("Set2DEquals reordered a row of its first argument: %v", rules)
+	}
+	if !ArrayEquals(want[1], []string{"zoe", "data1", "read"}) {
+		t.Errorf("Set2DEquals reordered a row of its second argument: %v", want)
+	}
+
+	// The comparisons still discriminate after the change.
+	if SetEquals([]string{"a", "b"}, []string{"a", "c"}) {
+		t.Error("SetEquals should not hold for different members")
+	}
+	if SetEqualsInt([]int{1, 2}, []int{1, 3}) {
+		t.Error("SetEqualsInt should not hold for different members")
+	}
+	if Set2DEquals(rules, [][]string{{"zoe", "data1", "read"}, {"amy", "data2", "read"}}) {
+		t.Error("Set2DEquals should not hold for different rules")
+	}
+}
+
+// TestLRUCachePutOverwritesAnExistingKey pins CAS-8: Put on a key already in
+// the cache reuses that key's node for its links, so the new value has to be
+// written onto it. Re-linking alone left the cache answering with the value the
+// key was first stored with, and every later Put for that key was discarded
+// without a word. Both the plain and the synchronised cache are driven, because
+// the synchronised one delegates and would inherit the defect silently.

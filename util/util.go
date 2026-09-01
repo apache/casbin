@@ -153,33 +153,41 @@ func ParamsToString(s ...string) string {
 }
 
 // SetEquals determines whether two string sets are identical.
+// Neither argument is modified: these are usually answers the enforcer handed
+// back, which alias its own state, so sorting them in place would reorder the
+// caller's data as a side effect of asking a question about it.
 func SetEquals(a []string, b []string) bool {
 	if len(a) != len(b) {
 		return false
 	}
 
-	sort.Strings(a)
-	sort.Strings(b)
+	sortedA := append([]string(nil), a...)
+	sortedB := append([]string(nil), b...)
+	sort.Strings(sortedA)
+	sort.Strings(sortedB)
 
-	for i, v := range a {
-		if v != b[i] {
+	for i, v := range sortedA {
+		if v != sortedB[i] {
 			return false
 		}
 	}
 	return true
 }
 
-// SetEquals determines whether two int sets are identical.
+// SetEqualsInt determines whether two int sets are identical.
+// Neither argument is modified, for the same reason as SetEquals.
 func SetEqualsInt(a []int, b []int) bool {
 	if len(a) != len(b) {
 		return false
 	}
 
-	sort.Ints(a)
-	sort.Ints(b)
+	sortedA := append([]int(nil), a...)
+	sortedB := append([]int(nil), b...)
+	sort.Ints(sortedA)
+	sort.Ints(sortedB)
 
-	for i, v := range a {
-		if v != b[i] {
+	for i, v := range sortedA {
+		if v != sortedB[i] {
 			return false
 		}
 	}
@@ -187,23 +195,28 @@ func SetEqualsInt(a []int, b []int) bool {
 }
 
 // Set2DEquals determines whether two string slice sets are identical.
+// Neither argument is modified, rows included: GetPermissionsForUser and its
+// siblings hand back the model's own rules, and sorting a row in place
+// permuted the fields of a stored policy rule.
 func Set2DEquals(a [][]string, b [][]string) bool {
 	if len(a) != len(b) {
 		return false
 	}
 
-	var aa []string
-	for _, v := range a {
-		sort.Strings(v)
-		aa = append(aa, strings.Join(v, ", "))
-	}
-	var bb []string
-	for _, v := range b {
-		sort.Strings(v)
-		bb = append(bb, strings.Join(v, ", "))
+	return SetEquals(sortedRows(a), sortedRows(b))
+}
+
+// sortedRows renders each row as a string with its fields in sorted order,
+// working on a copy of the row.
+func sortedRows(rows [][]string) []string {
+	rendered := make([]string, 0, len(rows))
+	for _, row := range rows {
+		sorted := append([]string(nil), row...)
+		sort.Strings(sorted)
+		rendered = append(rendered, strings.Join(sorted, ", "))
 	}
 
-	return SetEquals(aa, bb)
+	return rendered
 }
 
 // JoinSlice joins a string and a slice into a new slice.
