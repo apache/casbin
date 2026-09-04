@@ -152,3 +152,31 @@ m = r.sub == p.sub && r.obj == p.obj && r.act == p.act
 		t.Errorf("rule after round-trip: %q, expected %q (line: %q)", rules[0], rule, line)
 	}
 }
+
+// TestLoadPolicyArrayEmptyPtype verifies that a rule without a policy type
+// returns an error instead of panicking with a slice-bounds error.
+func TestLoadPolicyArrayEmptyPtype(t *testing.T) {
+	e, _ := casbin.NewEnforcer("../examples/basic_model.conf")
+
+	err := persist.LoadPolicyArray([]string{"", "alice", "data1"}, e.GetModel())
+	if err == nil {
+		t.Fatal(`LoadPolicyArray(["", "alice", "data1"]) error = nil, want an error for the empty policy type`)
+	}
+
+	err = persist.LoadPolicyArray([]string{}, e.GetModel())
+	if err == nil {
+		t.Fatal("LoadPolicyArray([]) error = nil, want an error for the empty rule")
+	}
+}
+
+// TestLoadPolicyLineLeadingComma verifies that a policy line with a stray
+// leading comma (which yields an empty policy type token) returns an error
+// instead of panicking.
+func TestLoadPolicyLineLeadingComma(t *testing.T) {
+	e, _ := casbin.NewEnforcer("../examples/basic_model.conf")
+
+	err := persist.LoadPolicyLine(", alice, data1", e.GetModel())
+	if err == nil {
+		t.Fatal(`LoadPolicyLine(", alice, data1") error = nil, want an error for the missing policy type`)
+	}
+}

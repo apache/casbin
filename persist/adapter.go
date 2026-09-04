@@ -20,6 +20,7 @@ package persist
 import (
 	"bytes"
 	"encoding/csv"
+	"errors"
 	"strings"
 
 	"github.com/casbin/casbin/v3/model"
@@ -74,6 +75,9 @@ func PolicyLineToCsv(ptype string, rule []string) (string, error) {
 
 // LoadPolicyArray loads a policy rule to model.
 func LoadPolicyArray(rule []string, m model.Model) error {
+	if len(rule) == 0 || rule[0] == "" {
+		return errors.New("invalid policy rule: missing policy type")
+	}
 	key := rule[0]
 	sec := key[:1]
 	ok, err := m.HasPolicyEx(sec, key, rule[1:])
