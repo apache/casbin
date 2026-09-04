@@ -114,8 +114,8 @@ func (e *CachedEnforcer) RemovePolicy(params ...interface{}) (bool, error) {
 func (e *CachedEnforcer) RemovePolicies(rules [][]string) (bool, error) {
 	if len(rules) != 0 {
 		if atomic.LoadInt32(&e.enableCache) != 0 {
-			irule := make([]interface{}, len(rules[0]))
 			for _, rule := range rules {
+				irule := make([]interface{}, len(rule))
 				for i, param := range rule {
 					irule[i] = param
 				}

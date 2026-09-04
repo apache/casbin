@@ -83,3 +83,37 @@ func TestSyncCache(t *testing.T) {
 	testSyncEnforceCache(t, e, "alice", "data2", "read", true)
 	testSyncEnforceCache(t, e, "alice", "data2", "write", true)
 }
+
+// TestSyncRemovePoliciesCacheRaggedRulesStaleEntry verifies that RemovePolicies
+// invalidates the cached decision of every rule in the batch even when the
+// rules have different lengths. The key buffer used to be sized from the first
+// rule and reused, so a later shorter rule produced a key with a stale tail and
+// the cached decision of a removed rule survived the removal.
+func TestSyncRemovePoliciesCacheRaggedRulesStaleEntry(t *testing.T) {
+	e, _ := NewSyncedCachedEnforcer("examples/rbac_model.conf", "examples/rbac_policy.csv")
+
+	_, _ = e.AddPolicies([][]string{{"bob", "data2", "write", "extra"}})
+	testSyncEnforceCache(t, e, "alice", "data1", "read", true)
+
+	_, _ = e.RemovePolicies([][]string{
+		{"bob", "data2", "write", "extra"},
+		{"alice", "data1", "read"},
+	})
+
+	testSyncEnforceCache(t, e, "alice", "data1", "read", false)
+}
+
+// TestSyncRemovePoliciesCacheRaggedRulesLongerRule verifies that a rule longer
+// than the first rule of the batch does not panic. The key buffer used to be
+// sized from the first rule and reused, so writing a longer rule panicked with
+// index out of range.
+func TestSyncRemovePoliciesCacheRaggedRulesLongerRule(t *testing.T) {
+	e, _ := NewSyncedCachedEnforcer("examples/rbac_model.conf", "examples/rbac_policy.csv")
+
+	testSyncEnforceCache(t, e, "alice", "data1", "read", true)
+
+	_, _ = e.RemovePolicies([][]string{
+		{"alice", "data1", "read"},
+		{"bob", "data2", "write", "extra"},
+	})
+}
