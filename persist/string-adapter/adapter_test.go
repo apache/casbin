@@ -171,3 +171,16 @@ g, alice, data_group_admin
 		t.Error("unexpected enforce result")
 	}
 }
+
+// Test_LoadPolicyMalformedLine verifies that a malformed policy line (here an
+// unterminated quoted field) makes LoadPolicy return an error instead of
+// silently producing a model that lacks the rule.
+func Test_LoadPolicyMalformedLine(t *testing.T) {
+	a := NewAdapter(`p, alice, data1, "read`)
+	m := model.NewModel()
+
+	err := a.LoadPolicy(m)
+	if err == nil {
+		t.Fatal("LoadPolicy() error = nil, want a parse error for the unterminated quoted field")
+	}
+}
