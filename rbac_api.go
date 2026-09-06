@@ -197,7 +197,7 @@ func (e *Enforcer) GetNamedPermissionsForUser(ptype string, user string, domain 
 			continue
 		}
 		args := make([]string, len(assertion.Tokens))
-		subIndex, err := e.GetFieldIndex("p", constant.SubjectIndex)
+		subIndex, err := e.GetFieldIndex(ptype, constant.SubjectIndex)
 		if err != nil {
 			subIndex = 0
 		}
