@@ -25,6 +25,7 @@ import (
 
 	"github.com/casbin/casbin/v3/constant"
 	"github.com/casbin/casbin/v3/errors"
+	"github.com/casbin/casbin/v3/model"
 	defaultrolemanager "github.com/casbin/casbin/v3/rbac/default-role-manager"
 	"github.com/casbin/casbin/v3/util"
 )
@@ -891,4 +892,56 @@ func TestGetImplicitObjectPatternsForUser(t *testing.T) {
 
 	// Test case 5: non-existent action
 	testGetImplicitObjectPatternsForUser(t, e, "admin", "domain1", "non_existent", []string{})
+}
+
+func TestNamedPermissionsForUserWithDifferentColumnOrder(t *testing.T) {
+	text := `
+[request_definition]
+r = sub, dom, obj, act
+
+[policy_definition]
+p = sub, dom, obj, act
+p2 = dom, sub, obj, act
+
+[role_definition]
+g = _, _, _
+
+[policy_effect]
+e = some(where (p.eft == allow))
+
+[matchers]
+m = g(r.sub, p.sub, r.dom) && r.dom == p.dom && r.obj == p.obj && r.act == p.act
+`
+	m, err := model.NewModelFromString(text)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, err := NewEnforcer(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err = e.AddNamedPolicy("p2", "tenant1", "alice", "report1", "read"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = e.AddNamedPolicy("p2", "tenant1", "bob", "report2", "read"); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := e.GetNamedPermissionsForUser("p2", "alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := [][]string{{"tenant1", "alice", "report1", "read"}}
+	if !util.Array2DEquals(got, expected) {
+		t.Errorf("GetNamedPermissionsForUser(\"p2\", \"alice\") = %v, want %v", got, expected)
+	}
+
+	got, err = e.GetNamedPermissionsForUser("p2", "alice", "tenant1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !util.Array2DEquals(got, expected) {
+		t.Errorf("GetNamedPermissionsForUser(\"p2\", \"alice\", \"tenant1\") = %v, want %v", got, expected)
+	}
 }
