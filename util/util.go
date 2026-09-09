@@ -153,6 +153,7 @@ func ParamsToString(s ...string) string {
 }
 
 // SetEquals determines whether two string sets are identical.
+// It does not modify the input slices.
 func SetEquals(a []string, b []string) bool {
 	if len(a) != len(b) {
 		return false
@@ -173,6 +174,7 @@ func SetEquals(a []string, b []string) bool {
 }
 
 // SetEqualsInt determines whether two int sets are identical.
+// It does not modify the input slices.
 func SetEqualsInt(a []int, b []int) bool {
 	if len(a) != len(b) {
 		return false

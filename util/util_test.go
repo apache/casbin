@@ -123,6 +123,39 @@ func TestSetEquals(t *testing.T) {
 	testSetEquals(t, []string{"a", "b", "c"}, []string{"a", "b"}, false)
 	testSetEquals(t, []string{"a", "b", "c"}, []string{"a", "c", "b"}, true)
 	testSetEquals(t, []string{"a", "b", "c"}, []string{}, false)
+
+	// Make sure SetEquals doesn't reorder the caller's slices as a side effect.
+	// Before the fix, sort.Strings(a) and sort.Strings(b) were called directly on
+	// the arguments, so the original slices were silently mutated.
+	a := []string{"c", "a", "b"}
+	b := []string{"b", "c", "a"}
+	_ = SetEquals(a, b)
+	if a[0] != "c" || a[1] != "a" || a[2] != "b" {
+		t.Errorf("SetEquals mutated the first argument: got %v, want [c a b]", a)
+	}
+	if b[0] != "b" || b[1] != "c" || b[2] != "a" {
+		t.Errorf("SetEquals mutated the second argument: got %v, want [b c a]", b)
+	}
+}
+
+func TestSetEqualsInt(t *testing.T) {
+	if !SetEqualsInt([]int{1, 2, 3}, []int{3, 2, 1}) {
+		t.Error("SetEqualsInt: expected true for same elements in different order")
+	}
+	if SetEqualsInt([]int{1, 2, 3}, []int{1, 2}) {
+		t.Error("SetEqualsInt: expected false for different length slices")
+	}
+
+	// Same mutation check for the int variant.
+	x := []int{3, 1, 2}
+	y := []int{2, 3, 1}
+	_ = SetEqualsInt(x, y)
+	if x[0] != 3 || x[1] != 1 || x[2] != 2 {
+		t.Errorf("SetEqualsInt mutated the first argument: got %v, want [3 1 2]", x)
+	}
+	if y[0] != 2 || y[1] != 3 || y[2] != 1 {
+		t.Errorf("SetEqualsInt mutated the second argument: got %v, want [2 3 1]", y)
+	}
 }
 
 func testContainEval(t *testing.T, s string, res bool) {
