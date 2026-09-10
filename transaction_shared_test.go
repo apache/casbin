@@ -23,7 +23,7 @@ package casbin
 // The core concern: when an application runs business-table writes and policy
 // changes inside the same database transaction, both must be atomic.  If the
 // business step fails after the policy write, the policy write must roll back
-// too — not get silently persisted.
+// too, not get silently persisted.
 //
 // The tests here use a mock adapter that models exactly that contract: writes
 // are staged in an "inflight" buffer and only moved to the "persisted" store
@@ -46,6 +46,7 @@ import (
 type atomicMockAdapter struct {
 	persisted    map[string]bool
 	businessRows map[string]bool
+	failOnRule   string
 }
 
 type atomicMockTxState struct {
@@ -129,13 +130,24 @@ type atomicMockTxAdapter struct {
 func (a *atomicMockTxAdapter) LoadPolicy(model.Model) error { return nil }
 func (a *atomicMockTxAdapter) SavePolicy(model.Model) error { return nil }
 func (a *atomicMockTxAdapter) AddPolicy(_ string, _ string, rule []string) error {
-	a.tx.inflightPolicies = append(a.tx.inflightPolicies, atomicTxOp{add: true, key: atomicRuleKey(rule)})
+	k := atomicRuleKey(rule)
+	if k == a.tx.parent.failOnRule {
+		return errors.New("db write failed: " + k)
+	}
+	a.tx.inflightPolicies = append(a.tx.inflightPolicies, atomicTxOp{add: true, key: k})
 	return nil
 }
+// RemovePolicy is unreachable from the commit flush: Transaction.RemoveFilteredPolicy
+// resolves filters against the buffered model and buffers a plain OperationRemove, so
+// applyRemoveOperationToDatabase always calls RemovePolicies or RemovePolicy, never
+// RemoveFilteredPolicy. This method exists only to satisfy persist.Adapter.
 func (a *atomicMockTxAdapter) RemovePolicy(_ string, _ string, rule []string) error {
 	a.tx.inflightPolicies = append(a.tx.inflightPolicies, atomicTxOp{add: false, key: atomicRuleKey(rule)})
 	return nil
 }
+
+// RemoveFilteredPolicy exists only to satisfy persist.Adapter; it is never called
+// through the commit flush (see RemovePolicy above for details).
 func (a *atomicMockTxAdapter) RemoveFilteredPolicy(_ string, _ string, _ int, _ ...string) error {
 	return nil
 }
@@ -165,9 +177,7 @@ func TestSharedTransactionRollback(t *testing.T) {
 		}
 
 		// Caller writes to their own table via the transaction-scoped adapter.
-		if sharedTx, ok := tx.txContext.(*atomicMockTxState); ok {
-			sharedTx.insertBusinessRow("order:42")
-		}
+		tx.GetAdapter().(*atomicMockTxAdapter).tx.insertBusinessRow("order:42")
 
 		return bizErr
 	})
@@ -204,9 +214,8 @@ func TestSharedTransactionCommit(t *testing.T) {
 		if _, addErr := tx.AddPolicy("admin", "data1", "read"); addErr != nil {
 			return addErr
 		}
-		if sharedTx, ok := tx.txContext.(*atomicMockTxState); ok {
-			sharedTx.insertBusinessRow("order:99")
-		}
+		// Caller writes to their own table via the transaction-scoped adapter.
+		tx.GetAdapter().(*atomicMockTxAdapter).tx.insertBusinessRow("order:99")
 		return nil
 	})
 	if err != nil {
@@ -232,5 +241,42 @@ func TestSharedTransactionCommit(t *testing.T) {
 	// Role links must have been rebuilt: alice inherits admin's permission.
 	if ok, enforceErr := e.Enforce("alice", "data1", "read"); enforceErr != nil || !ok {
 		t.Fatalf("alice should inherit admin's read, got %v (err %v)", ok, enforceErr)
+	}
+}
+
+// TestSharedTransactionFlushFailure fails a policy write during the commit
+// flush, after an earlier rule and the business row have already been staged
+// on the transaction.  Only a genuinely transactional adapter discards them.
+func TestSharedTransactionFlushFailure(t *testing.T) {
+	a := newAtomicMockAdapter()
+	a.failOnRule = "admin,data1,read"
+
+	e, err := NewTransactionalEnforcer("examples/rbac_model.conf", a)
+	if err != nil {
+		t.Fatalf("enforcer: %v", err)
+	}
+
+	err = e.WithTransaction(context.Background(), func(tx *Transaction) error {
+		if _, addErr := tx.AddGroupingPolicy("alice", "admin"); addErr != nil {
+			return addErr
+		}
+		if _, addErr := tx.AddPolicy("admin", "data1", "read"); addErr != nil {
+			return addErr
+		}
+		tx.GetAdapter().(*atomicMockTxAdapter).tx.insertBusinessRow("order:7")
+		return nil
+	})
+	if err == nil {
+		t.Fatal("commit must surface the failed policy write")
+	}
+
+	if a.persisted["alice,admin"] {
+		t.Fatal("a rule staged before the failure must not survive the rollback")
+	}
+	if a.businessRows["order:7"] {
+		t.Fatal("the business row must not survive the rollback")
+	}
+	if ok, _ := e.HasGroupingPolicy("alice", "admin"); ok {
+		t.Fatal("the model must not reflect a transaction that never committed")
 	}
 }
