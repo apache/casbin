@@ -46,10 +46,13 @@ func (a *Adapter) LoadPolicy(model model.Model) error {
 	}
 	strs := strings.Split(a.Line, "\n")
 	for _, str := range strs {
+		str = strings.TrimSpace(str)
 		if str == "" {
 			continue
 		}
-		_ = persist.LoadPolicyLine(str, model)
+		if err := persist.LoadPolicyLine(str, model); err != nil {
+			return err
+		}
 	}
 
 	return nil
