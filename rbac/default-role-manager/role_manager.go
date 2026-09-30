@@ -494,6 +494,18 @@ type DomainManager struct {
 	matchingFunc       rbac.MatchingFunc
 	domainMatchingFunc rbac.MatchingFunc
 	matchingFuncCache  *util.SyncLRUCache
+
+	// links holds the links as they were added, by (name1, name2), with the
+	// domains they were added in. The role manager of a domain also holds the
+	// links it inherits from matching domain patterns, so it cannot tell on its
+	// own whether a link is still granted after one of its sources is deleted.
+	links   map[roleLink]map[string]struct{}
+	linksMu sync.Mutex
+}
+
+type roleLink struct {
+	name1 string
+	name2 string
 }
 
 // NewDomainManager is the constructor for creating an instance of the
@@ -524,27 +536,72 @@ func (dm *DomainManager) AddDomainMatchingFunc(name string, fn rbac.MatchingFunc
 	dm.rebuild()
 }
 
-// clears the map of RoleManagers.
+// rebuilds the map of RoleManagers from the links as they were added.
 func (dm *DomainManager) rebuild() {
-	rmMap := dm.rmMap
-	_ = dm.Clear()
-	rmMap.Range(func(key, value interface{}) bool {
-		domain := key.(string)
-		rm := value.(*RoleManagerImpl)
+	type domainLink struct {
+		roleLink
+		domain string
+	}
 
-		rm.Range(func(name1, name2 string, _ ...string) bool {
-			_ = dm.AddLink(name1, name2, domain)
-			return true
-		})
-		return true
-	})
+	var links []domainLink
+	dm.linksMu.Lock()
+	for link, domains := range dm.links {
+		for domain := range domains {
+			links = append(links, domainLink{link, domain})
+		}
+	}
+	dm.linksMu.Unlock()
+
+	_ = dm.Clear()
+	for _, link := range links {
+		_ = dm.AddLink(link.name1, link.name2, link.domain)
+	}
 }
 
 // Clear clears all stored data and resets the role manager to the initial state.
 func (dm *DomainManager) Clear() error {
 	dm.rmMap = &sync.Map{}
 	dm.matchingFuncCache = util.NewSyncLRUCache(100)
+	dm.linksMu.Lock()
+	dm.links = map[roleLink]map[string]struct{}{}
+	dm.linksMu.Unlock()
 	return nil
+}
+
+func (dm *DomainManager) addLinkRecord(name1, name2, domain string) {
+	dm.linksMu.Lock()
+	defer dm.linksMu.Unlock()
+
+	link := roleLink{name1, name2}
+	if dm.links[link] == nil {
+		dm.links[link] = map[string]struct{}{}
+	}
+	dm.links[link][domain] = struct{}{}
+}
+
+func (dm *DomainManager) deleteLinkRecord(name1, name2, domain string) {
+	dm.linksMu.Lock()
+	defer dm.linksMu.Unlock()
+
+	link := roleLink{name1, name2}
+	delete(dm.links[link], domain)
+	if len(dm.links[link]) == 0 {
+		delete(dm.links, link)
+	}
+}
+
+// linkGranted reports whether a remaining link still grants name1 -> name2 in
+// domain, either added in domain itself or in a domain pattern matching it.
+func (dm *DomainManager) linkGranted(name1, name2, domain string) bool {
+	dm.linksMu.Lock()
+	defer dm.linksMu.Unlock()
+
+	for linkDomain := range dm.links[roleLink{name1, name2}] {
+		if dm.Match(domain, linkDomain) {
+			return true
+		}
+	}
+	return false
 }
 
 func (dm *DomainManager) getDomain(domains ...string) (domain string, err error) {
@@ -618,6 +675,8 @@ func (dm *DomainManager) AddLink(name1 string, name2 string, domains ...string) 
 	if err != nil {
 		return err
 	}
+	dm.addLinkRecord(name1, name2, domain)
+
 	roleManager := dm.getRoleManager(domain, true) // create role manager if it does not exist
 	_ = roleManager.AddLink(name1, name2, domains...)
 
@@ -634,12 +693,25 @@ func (dm *DomainManager) DeleteLink(name1 string, name2 string, domains ...strin
 	if err != nil {
 		return err
 	}
-	roleManager := dm.getRoleManager(domain, true) // create role manager if it does not exist
-	_ = roleManager.DeleteLink(name1, name2, domains...)
+	dm.deleteLinkRecord(name1, name2, domain)
 
-	dm.rangeAffectedRoleManagers(domain, func(rm *RoleManagerImpl) {
-		_ = rm.DeleteLink(name1, name2, domains...)
-	})
+	// A domain keeps the link while another link still grants it there: the
+	// same link added in a matching domain pattern, or, for the domains matched
+	// by a deleted pattern, the link added in that domain itself.
+	roleManager := dm.getRoleManager(domain, true) // create role manager if it does not exist
+	if !dm.linkGranted(name1, name2, domain) {
+		_ = roleManager.DeleteLink(name1, name2, domains...)
+	}
+
+	if dm.domainMatchingFunc != nil {
+		dm.rmMap.Range(func(key, value interface{}) bool {
+			domain2 := key.(string)
+			if domain != domain2 && dm.Match(domain2, domain) && !dm.linkGranted(name1, name2, domain2) {
+				_ = value.(*RoleManagerImpl).DeleteLink(name1, name2, domains...)
+			}
+			return true
+		})
+	}
 	return nil
 }
 
@@ -735,6 +807,15 @@ func (dm *DomainManager) BuildRelationship(name1 string, name2 string, domain ..
 // DeleteDomain deletes the specified domain from DomainManager.
 func (dm *DomainManager) DeleteDomain(domain string) error {
 	dm.rmMap.Delete(domain)
+
+	dm.linksMu.Lock()
+	for link, domains := range dm.links {
+		delete(domains, domain)
+		if len(domains) == 0 {
+			delete(dm.links, link)
+		}
+	}
+	dm.linksMu.Unlock()
 	return nil
 }
 

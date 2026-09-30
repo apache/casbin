@@ -343,6 +343,51 @@ func TestDomainMatchingFuncWithDifferentDomain(t *testing.T) {
 	testDomainRole(t, rm, "alice", "admin", "domain2", false)
 }
 
+func TestDomainPatternDeleteLinkKeepsLinksStillGranted(t *testing.T) {
+	rm := NewRoleManager(10)
+	rm.AddDomainMatchingFunc("keyMatch", util.KeyMatch)
+
+	// alice is admin in every domain and also in domain1 on its own.
+	_ = rm.AddLink("alice", "admin", "*")
+	_ = rm.AddLink("alice", "admin", "domain1")
+
+	// Deleting the domain1 link must not drop what "*" still grants there.
+	_ = rm.DeleteLink("alice", "admin", "domain1")
+	testDomainRole(t, rm, "alice", "admin", "domain1", true)
+	testDomainRole(t, rm, "alice", "admin", "domain2", true)
+
+	// bob is admin in domain2 on his own and also through "*".
+	_ = rm.AddLink("bob", "admin", "domain2")
+	_ = rm.AddLink("bob", "admin", "*")
+
+	// Deleting the "*" link must not drop bob's own domain2 link.
+	_ = rm.DeleteLink("bob", "admin", "*")
+	testDomainRole(t, rm, "bob", "admin", "domain2", true)
+	testDomainRole(t, rm, "bob", "admin", "domain1", false)
+
+	// Once no link grants it any more, the link is gone everywhere.
+	_ = rm.DeleteLink("alice", "admin", "*")
+	testDomainRole(t, rm, "alice", "admin", "domain1", false)
+	testDomainRole(t, rm, "alice", "admin", "domain2", false)
+	_ = rm.DeleteLink("bob", "admin", "domain2")
+	testDomainRole(t, rm, "bob", "admin", "domain2", false)
+}
+
+func TestDomainPatternRebuildUsesAddedLinks(t *testing.T) {
+	rm := NewRoleManager(10)
+	rm.AddDomainMatchingFunc("keyMatch", util.KeyMatch)
+
+	_ = rm.AddLink("carol", "admin", "domain1")
+	_ = rm.AddLink("alice", "admin", "*")
+
+	// Setting the matching function again rebuilds the role managers; the
+	// "*" link copied into domain1 must not become a domain1 link of its own.
+	rm.AddDomainMatchingFunc("keyMatch", util.KeyMatch)
+	_ = rm.DeleteLink("alice", "admin", "*")
+	testDomainRole(t, rm, "alice", "admin", "domain1", false)
+	testDomainRole(t, rm, "carol", "admin", "domain1", true)
+}
+
 func TestTemporaryRoles(t *testing.T) {
 	rm := NewRoleManager(10)
 	rm.AddMatchingFunc("regexMatch", util.RegexMatch)
