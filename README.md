@@ -25,6 +25,7 @@ Apache Casbin
 [![Coverage Status](https://coveralls.io/repos/github/apache/casbin/badge.svg?branch=master)](https://coveralls.io/github/apache/casbin?branch=master)
 [![Godoc](https://godoc.org/github.com/apache/casbin?status.svg)](https://pkg.go.dev/github.com/casbin/casbin/v2)
 [![Release](https://img.shields.io/github/release/apache/casbin.svg)](https://github.com/apache/casbin/releases/latest)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15229/badge)](https://www.bestpractices.dev/projects/15229)
 [![Discord](https://img.shields.io/discord/1022748306096537660?logo=discord&label=discord&color=5865F2)](https://discord.gg/S5UjpzGZjN)
 
 **News**: still worry about how to write the correct Apache Casbin policy? ``Apache Casbin online editor`` is coming to help! Try it at: https://casbin.apache.org/editor/
