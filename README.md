@@ -28,6 +28,8 @@ Apache Casbin
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15229/badge)](https://www.bestpractices.dev/projects/15229)
 [![Discord](https://img.shields.io/discord/1022748306096537660?logo=discord&label=discord&color=5865F2)](https://discord.gg/S5UjpzGZjN)
 
+<a href="https://trendshift.io/repositories/22882" target="_blank"><img src="https://trendshift.io/api/badge/repositories/22882" alt="apache%2Fcasbin | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+
 **News**: still worry about how to write the correct Apache Casbin policy? ``Apache Casbin online editor`` is coming to help! Try it at: https://casbin.apache.org/editor/
 
 ![casbin Logo](casbin-logo.png)
