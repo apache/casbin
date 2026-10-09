@@ -18,6 +18,7 @@
 package casbin
 
 import (
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -166,15 +167,22 @@ func GetCacheKey(params ...interface{}) (string, bool) {
 	for _, param := range params {
 		switch typedParam := param.(type) {
 		case string:
-			key.WriteString(typedParam)
+			writeCacheKeyPart(&key, 's', typedParam)
 		case CacheableParam:
-			key.WriteString(typedParam.GetCacheKey())
+			writeCacheKeyPart(&key, 'c', typedParam.GetCacheKey())
 		default:
 			return "", false
 		}
-		key.WriteString("$$")
 	}
 	return key.String(), true
+}
+
+// writeCacheKeyPart length-prefixes each part so that different requests never share a key.
+func writeCacheKeyPart(key *strings.Builder, kind byte, part string) {
+	key.WriteByte(kind)
+	key.WriteString(strconv.Itoa(len(part)))
+	key.WriteByte(':')
+	key.WriteString(part)
 }
 
 // ClearPolicy clears all policy.
