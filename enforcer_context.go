@@ -416,6 +416,8 @@ func (e *ContextEnforcer) SelfUpdatePoliciesCtx(ctx context.Context, sec string,
 
 // addPolicyWithoutNotifyCtx adds a rule to the current policy with context.
 func (e *ContextEnforcer) addPolicyWithoutNotifyCtx(ctx context.Context, sec string, ptype string, rule []string) (bool, error) {
+	defer e.bumpPolicyVersion()
+
 	if e.dispatcher != nil && e.autoNotifyDispatcher {
 		return true, e.dispatcher.AddPolicies(sec, ptype, [][]string{rule})
 	}
@@ -450,6 +452,8 @@ func (e *ContextEnforcer) addPolicyWithoutNotifyCtx(ctx context.Context, sec str
 
 // addPoliciesWithoutNotifyCtx adds rules to the current policy with context.
 func (e *ContextEnforcer) addPoliciesWithoutNotifyCtx(ctx context.Context, sec string, ptype string, rules [][]string, autoRemoveRepeat bool) (bool, error) {
+	defer e.bumpPolicyVersion()
+
 	if e.dispatcher != nil && e.autoNotifyDispatcher {
 		return true, e.dispatcher.AddPolicies(sec, ptype, rules)
 	}
@@ -491,6 +495,8 @@ func (e *ContextEnforcer) addPoliciesWithoutNotifyCtx(ctx context.Context, sec s
 
 // removePolicyWithoutNotifyCtx removes a rule from the current policy with context.
 func (e *ContextEnforcer) removePolicyWithoutNotifyCtx(ctx context.Context, sec string, ptype string, rule []string) (bool, error) {
+	defer e.bumpPolicyVersion()
+
 	if e.dispatcher != nil && e.autoNotifyDispatcher {
 		return true, e.dispatcher.RemovePolicies(sec, ptype, [][]string{rule})
 	}
@@ -520,6 +526,8 @@ func (e *ContextEnforcer) removePolicyWithoutNotifyCtx(ctx context.Context, sec 
 
 // removePoliciesWithoutNotifyCtx removes rules from the current policy with context.
 func (e *ContextEnforcer) removePoliciesWithoutNotifyCtx(ctx context.Context, sec string, ptype string, rules [][]string) (bool, error) {
+	defer e.bumpPolicyVersion()
+
 	if hasPolicies, err := e.model.HasPolicies(sec, ptype, rules); !hasPolicies || err != nil {
 		return hasPolicies, err
 	}
@@ -552,6 +560,8 @@ func (e *ContextEnforcer) removePoliciesWithoutNotifyCtx(ctx context.Context, se
 
 // removeFilteredPolicyWithoutNotifyCtx removes policy rules that match the filter from the current policy with context.
 func (e *ContextEnforcer) removeFilteredPolicyWithoutNotifyCtx(ctx context.Context, sec string, ptype string, fieldIndex int, fieldValues []string) (bool, error) {
+	defer e.bumpPolicyVersion()
+
 	if len(fieldValues) == 0 {
 		return false, Err.ErrInvalidFieldValuesParameter
 	}
@@ -585,6 +595,8 @@ func (e *ContextEnforcer) removeFilteredPolicyWithoutNotifyCtx(ctx context.Conte
 
 // updatePolicyWithoutNotifyCtx updates a policy rule in the current policy with context.
 func (e *ContextEnforcer) updatePolicyWithoutNotifyCtx(ctx context.Context, sec string, ptype string, oldRule, newRule []string) (bool, error) {
+	defer e.bumpPolicyVersion()
+
 	if e.dispatcher != nil && e.autoNotifyDispatcher {
 		return true, e.dispatcher.UpdatePolicy(sec, ptype, oldRule, newRule)
 	}
@@ -616,6 +628,8 @@ func (e *ContextEnforcer) updatePolicyWithoutNotifyCtx(ctx context.Context, sec 
 }
 
 func (e *ContextEnforcer) updatePoliciesWithoutNotifyCtx(ctx context.Context, sec string, ptype string, oldRules [][]string, newRules [][]string) (bool, error) {
+	defer e.bumpPolicyVersion()
+
 	if len(newRules) != len(oldRules) {
 		return false, fmt.Errorf("the length of oldRules should be equal to the length of newRules, but got the length of oldRules is %d, the length of newRules is %d", len(oldRules), len(newRules))
 	}
@@ -806,6 +820,8 @@ func (e *ContextEnforcer) updateFilteredPoliciesCtx(ctx context.Context, sec str
 }
 
 func (e *ContextEnforcer) updateFilteredPoliciesWithoutNotifyCtx(ctx context.Context, sec string, ptype string, newRules [][]string, fieldIndex int, fieldValues ...string) ([][]string, error) {
+	defer e.bumpPolicyVersion()
+
 	var (
 		oldRules [][]string
 		err      error

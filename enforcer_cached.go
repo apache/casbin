@@ -29,10 +29,11 @@ import (
 // CachedEnforcer wraps Enforcer and provides decision cache.
 type CachedEnforcer struct {
 	*Enforcer
-	expireTime  time.Duration
-	cache       cache.Cache
-	enableCache int32
-	locker      *sync.RWMutex
+	cacheVersion uint64
+	expireTime   time.Duration
+	cache        cache.Cache
+	enableCache  int32
+	locker       *sync.RWMutex
 }
 
 type CacheableParam interface {
@@ -51,6 +52,7 @@ func NewCachedEnforcer(params ...interface{}) (*CachedEnforcer, error) {
 	e.enableCache = 1
 	e.cache, _ = cache.NewDefaultCache()
 	e.locker = new(sync.RWMutex)
+	e.cacheVersion = e.getPolicyVersion()
 	return e, nil
 }
 
@@ -75,6 +77,11 @@ func (e *CachedEnforcer) Enforce(rvals ...interface{}) (bool, error) {
 		return e.Enforcer.Enforce(rvals...)
 	}
 
+	version := e.getPolicyVersion()
+	if err := e.syncCacheVersion(version); err != nil {
+		return false, err
+	}
+
 	if res, err := e.getCachedResult(key); err == nil {
 		return res, nil
 	} else if err != cache.ErrNoSuchKey {
@@ -86,7 +93,7 @@ func (e *CachedEnforcer) Enforce(rvals ...interface{}) (bool, error) {
 		return false, err
 	}
 
-	err = e.setCachedResult(key, res, e.expireTime)
+	err = e.setCachedResult(version, key, res, e.expireTime)
 	return res, err
 }
 
@@ -143,12 +150,6 @@ func (e *CachedEnforcer) SetCache(c cache.Cache) {
 	e.cache = c
 }
 
-func (e *CachedEnforcer) setCachedResult(key string, res bool, extra ...interface{}) error {
-	e.locker.Lock()
-	defer e.locker.Unlock()
-	return e.cache.Set(key, res, extra...)
-}
-
 func (e *CachedEnforcer) getKey(params ...interface{}) (string, bool) {
 	return GetCacheKey(params...)
 }
@@ -185,4 +186,27 @@ func (e *CachedEnforcer) ClearPolicy() {
 		}
 	}
 	e.Enforcer.ClearPolicy()
+}
+
+// syncCacheVersion drops all cached decisions when the policy has changed since they were cached.
+func (e *CachedEnforcer) syncCacheVersion(version uint64) error {
+	e.locker.Lock()
+	defer e.locker.Unlock()
+	if version <= e.cacheVersion {
+		return nil
+	}
+	if err := e.cache.Clear(); err != nil {
+		return err
+	}
+	e.cacheVersion = version
+	return nil
+}
+
+func (e *CachedEnforcer) setCachedResult(version uint64, key string, res bool, extra ...interface{}) error {
+	e.locker.Lock()
+	defer e.locker.Unlock()
+	if version != e.cacheVersion {
+		return nil
+	}
+	return e.cache.Set(key, res, extra...)
 }

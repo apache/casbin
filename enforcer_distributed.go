@@ -46,6 +46,8 @@ func (d *DistributedEnforcer) SetDispatcher(dispatcher persist.Dispatcher) {
 // AddPoliciesSelf provides a method for dispatcher to add authorization rules to the current policy.
 // The function returns the rules affected and error.
 func (d *DistributedEnforcer) AddPoliciesSelf(shouldPersist func() bool, sec string, ptype string, rules [][]string) (affected [][]string, err error) {
+	defer d.bumpPolicyVersion()
+
 	d.m.Lock()
 	defer d.m.Unlock()
 	if shouldPersist != nil && shouldPersist() {
@@ -84,6 +86,8 @@ func (d *DistributedEnforcer) AddPoliciesSelf(shouldPersist func() bool, sec str
 // RemovePoliciesSelf provides a method for dispatcher to remove a set of rules from current policy.
 // The function returns the rules affected and error.
 func (d *DistributedEnforcer) RemovePoliciesSelf(shouldPersist func() bool, sec string, ptype string, rules [][]string) (affected [][]string, err error) {
+	defer d.bumpPolicyVersion()
+
 	d.m.Lock()
 	defer d.m.Unlock()
 	if shouldPersist != nil && shouldPersist() {
@@ -112,6 +116,8 @@ func (d *DistributedEnforcer) RemovePoliciesSelf(shouldPersist func() bool, sec 
 // RemoveFilteredPolicySelf provides a method for dispatcher to remove an authorization rule from the current policy, field filters can be specified.
 // The function returns the rules affected and error.
 func (d *DistributedEnforcer) RemoveFilteredPolicySelf(shouldPersist func() bool, sec string, ptype string, fieldIndex int, fieldValues ...string) (affected [][]string, err error) {
+	defer d.bumpPolicyVersion()
+
 	d.m.Lock()
 	defer d.m.Unlock()
 	if shouldPersist != nil && shouldPersist() {
@@ -139,6 +145,8 @@ func (d *DistributedEnforcer) RemoveFilteredPolicySelf(shouldPersist func() bool
 
 // ClearPolicySelf provides a method for dispatcher to clear all rules from the current policy.
 func (d *DistributedEnforcer) ClearPolicySelf(shouldPersist func() bool) error {
+	defer d.bumpPolicyVersion()
+
 	d.m.Lock()
 	defer d.m.Unlock()
 	if shouldPersist != nil && shouldPersist() {
@@ -155,6 +163,8 @@ func (d *DistributedEnforcer) ClearPolicySelf(shouldPersist func() bool) error {
 
 // UpdatePolicySelf provides a method for dispatcher to update an authorization rule from the current policy.
 func (d *DistributedEnforcer) UpdatePolicySelf(shouldPersist func() bool, sec string, ptype string, oldRule, newRule []string) (affected bool, err error) {
+	defer d.bumpPolicyVersion()
+
 	d.m.Lock()
 	defer d.m.Unlock()
 	if shouldPersist != nil && shouldPersist() {
@@ -185,6 +195,8 @@ func (d *DistributedEnforcer) UpdatePolicySelf(shouldPersist func() bool, sec st
 
 // UpdatePoliciesSelf provides a method for dispatcher to update a set of authorization rules from the current policy.
 func (d *DistributedEnforcer) UpdatePoliciesSelf(shouldPersist func() bool, sec string, ptype string, oldRules, newRules [][]string) (affected bool, err error) {
+	defer d.bumpPolicyVersion()
+
 	d.m.Lock()
 	defer d.m.Unlock()
 	if shouldPersist != nil && shouldPersist() {
@@ -215,6 +227,8 @@ func (d *DistributedEnforcer) UpdatePoliciesSelf(shouldPersist func() bool, sec 
 
 // UpdateFilteredPoliciesSelf provides a method for dispatcher to update a set of authorization rules from the current policy.
 func (d *DistributedEnforcer) UpdateFilteredPoliciesSelf(shouldPersist func() bool, sec string, ptype string, newRules [][]string, fieldIndex int, fieldValues ...string) (bool, error) {
+	defer d.bumpPolicyVersion()
+
 	d.m.Lock()
 	defer d.m.Unlock()
 	var (

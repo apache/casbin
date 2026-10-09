@@ -23,6 +23,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/casbin/casbin/v3/detector"
 	"github.com/casbin/casbin/v3/effector"
@@ -39,6 +40,8 @@ import (
 
 // Enforcer is the main interface for authorization enforcement and policy management.
 type Enforcer struct {
+	policyVersion uint64
+
 	modelPath string
 	model     model.Model
 	fm        model.FunctionMap
@@ -197,6 +200,7 @@ func (e *Enforcer) initialize() {
 	e.eft = effector.NewDefaultEffector()
 	e.watcher = nil
 	e.matcherMap = sync.Map{}
+	e.bumpPolicyVersion()
 
 	e.enabled = true
 	e.autoSave = true
@@ -696,6 +700,15 @@ func NewEnforceContext(suffix string) EnforceContext {
 
 func (e *Enforcer) invalidateMatcherMap() {
 	e.matcherMap = sync.Map{}
+	e.bumpPolicyVersion()
+}
+
+func (e *Enforcer) getPolicyVersion() uint64 {
+	return atomic.LoadUint64(&e.policyVersion)
+}
+
+func (e *Enforcer) bumpPolicyVersion() {
+	atomic.AddUint64(&e.policyVersion, 1)
 }
 
 // enforce use a custom matcher to decides whether a "subject" can access a "object" with the operation "action", input parameters are usually: (matcher, sub, obj, act), use model matcher by default when matcher is "".

@@ -46,6 +46,8 @@ func (e *Enforcer) validateConstraintsForGroupingPolicy() error {
 
 // addPolicy adds a rule to the current policy.
 func (e *Enforcer) addPolicyWithoutNotify(sec string, ptype string, rule []string) (bool, error) {
+	defer e.bumpPolicyVersion()
+
 	if e.dispatcher != nil && e.autoNotifyDispatcher {
 		return true, e.dispatcher.AddPolicies(sec, ptype, [][]string{rule})
 	}
@@ -87,6 +89,8 @@ func (e *Enforcer) addPolicyWithoutNotify(sec string, ptype string, rule []strin
 // If autoRemoveRepeat == true, existing rules are automatically filtered
 // Otherwise, false is returned directly.
 func (e *Enforcer) addPoliciesWithoutNotify(sec string, ptype string, rules [][]string, autoRemoveRepeat bool) (bool, error) {
+	defer e.bumpPolicyVersion()
+
 	if e.dispatcher != nil && e.autoNotifyDispatcher {
 		return true, e.dispatcher.AddPolicies(sec, ptype, rules)
 	}
@@ -133,6 +137,8 @@ func (e *Enforcer) addPoliciesWithoutNotify(sec string, ptype string, rules [][]
 
 // removePolicy removes a rule from the current policy.
 func (e *Enforcer) removePolicyWithoutNotify(sec string, ptype string, rule []string) (bool, error) {
+	defer e.bumpPolicyVersion()
+
 	if e.dispatcher != nil && e.autoNotifyDispatcher {
 		return true, e.dispatcher.RemovePolicies(sec, ptype, [][]string{rule})
 	}
@@ -166,6 +172,8 @@ func (e *Enforcer) removePolicyWithoutNotify(sec string, ptype string, rule []st
 }
 
 func (e *Enforcer) updatePolicyWithoutNotify(sec string, ptype string, oldRule []string, newRule []string) (bool, error) {
+	defer e.bumpPolicyVersion()
+
 	if e.dispatcher != nil && e.autoNotifyDispatcher {
 		return true, e.dispatcher.UpdatePolicy(sec, ptype, oldRule, newRule)
 	}
@@ -202,6 +210,8 @@ func (e *Enforcer) updatePolicyWithoutNotify(sec string, ptype string, oldRule [
 }
 
 func (e *Enforcer) updatePoliciesWithoutNotify(sec string, ptype string, oldRules [][]string, newRules [][]string) (bool, error) {
+	defer e.bumpPolicyVersion()
+
 	if len(newRules) != len(oldRules) {
 		return false, fmt.Errorf("the length of oldRules should be equal to the length of newRules, but got the length of oldRules is %d, the length of newRules is %d", len(oldRules), len(newRules))
 	}
@@ -244,6 +254,8 @@ func (e *Enforcer) updatePoliciesWithoutNotify(sec string, ptype string, oldRule
 
 // removePolicies removes rules from the current policy.
 func (e *Enforcer) removePoliciesWithoutNotify(sec string, ptype string, rules [][]string) (bool, error) {
+	defer e.bumpPolicyVersion()
+
 	if hasPolicies, err := e.model.HasPolicies(sec, ptype, rules); !hasPolicies || err != nil {
 		return hasPolicies, err
 	}
@@ -281,6 +293,8 @@ func (e *Enforcer) removePoliciesWithoutNotify(sec string, ptype string, rules [
 
 // removeFilteredPolicy removes rules based on field filters from the current policy.
 func (e *Enforcer) removeFilteredPolicyWithoutNotify(sec string, ptype string, fieldIndex int, fieldValues []string) (bool, error) {
+	defer e.bumpPolicyVersion()
+
 	if len(fieldValues) == 0 {
 		return false, Err.ErrInvalidFieldValuesParameter
 	}
@@ -318,6 +332,8 @@ func (e *Enforcer) removeFilteredPolicyWithoutNotify(sec string, ptype string, f
 }
 
 func (e *Enforcer) updateFilteredPoliciesWithoutNotify(sec string, ptype string, newRules [][]string, fieldIndex int, fieldValues ...string) ([][]string, error) {
+	defer e.bumpPolicyVersion()
+
 	var (
 		oldRules [][]string
 		err      error
