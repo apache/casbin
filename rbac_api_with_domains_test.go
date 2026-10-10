@@ -426,3 +426,27 @@ func TestGetRolesForUserInDomainWithConditionalFunctions(t *testing.T) {
 		}
 	})
 }
+
+func TestRemoveGroupingPolicyWithDomainPattern(t *testing.T) {
+	e, _ := NewEnforcer("examples/rbac_with_domain_pattern_model.conf", "examples/rbac_with_domain_pattern_policy.csv")
+	e.AddNamedDomainMatchingFunc("g", "KeyMatch", util.KeyMatch)
+
+	// alice is admin in every domain ("g, alice, admin, *"). Granting and then
+	// revoking domain1 on its own must leave the "*" grant in place.
+	_, _ = e.AddGroupingPolicy("alice", "admin", "domain1")
+	_, _ = e.RemoveGroupingPolicy("alice", "admin", "domain1")
+	testDomainEnforce(t, e, "alice", "domain1", "data1", "read", true)
+
+	// bob is admin in domain2 ("g, bob, admin, domain2"). Granting and then
+	// revoking "*" must leave his domain2 grant in place.
+	_, _ = e.AddGroupingPolicy("bob", "admin", "*")
+	_, _ = e.RemoveGroupingPolicy("bob", "admin", "*")
+	testDomainEnforce(t, e, "bob", "domain2", "data2", "read", true)
+	testDomainEnforce(t, e, "bob", "domain1", "data1", "read", false)
+
+	// A reload from the same policy gives the same answers.
+	_ = e.LoadPolicy()
+	testDomainEnforce(t, e, "alice", "domain1", "data1", "read", true)
+	testDomainEnforce(t, e, "bob", "domain2", "data2", "read", true)
+	testDomainEnforce(t, e, "bob", "domain1", "data1", "read", false)
+}
