@@ -61,6 +61,7 @@ Apache Casbin is a powerful and efficient open-source access control library for
 - [Policy management](#policy-management)
 - [Policy persistence](#policy-persistence)
 - [Policy consistence between multiple nodes](#policy-consistence-between-multiple-nodes)
+- [Enforcer pooling](#enforcer-pooling)
 - [Role manager](#role-manager)
 - [Benchmarks](#benchmarks)
 - [Examples](#examples)
@@ -228,6 +229,29 @@ https://casbin.apache.org/docs/adapters
 https://casbin.apache.org/docs/watchers
 
 https://casbin.apache.org/docs/production-deployment
+
+## Enforcer pooling
+
+If your application creates a filtered enforcer for every request, for example one enforcer per tenant, use `EnforcerPool` to reuse one enforcer per key and bound the cache with an LRU:
+
+```go
+// newAdapter creates a new filtered adapter for each enforcer.
+pool := casbin.NewFilteredEnforcerPool("model.conf", newAdapter, 1024)
+
+e, err := pool.Get(tenantID, []string{tenantID})
+if err != nil {
+    return err
+}
+allowed, err := e.Enforce("alice", "data1", "read")
+
+// After a policy change made outside this enforcer:
+pool.Invalidate(tenantID)
+
+// In a watcher callback:
+watcher.SetUpdateCallback(pool.OnUpdate)
+```
+
+`NewFilteredEnforcerPool` calls `newAdapter` once per enforcer, so filtered adapters that keep state are not shared. The filter passed to `Get` must be the type your adapter expects; use `NewEnforcerPool` with your own factory for other filter types. A `maxSize` of zero or less means no limit.
 
 ## Role manager
 
