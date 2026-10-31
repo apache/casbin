@@ -319,3 +319,25 @@ func TestInvalidPatternInPolicy(t *testing.T) {
 		t.Errorf("GetNamedImplicitRolesForUser returns %v %v, supposed to be [book_group]", roles, err)
 	}
 }
+
+func TestPatternWithCaptureGroupInPolicy(t *testing.T) {
+	e, err := NewEnforcer("examples/rbac_with_pattern_model.conf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.AddNamedMatchingFunc("g2", "matchingFunc", util.KeyMatch4)
+	if _, err = e.AddPolicy("alice", "book_group", "GET"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = e.AddNamedGroupingPolicy("g2", "/(book|pen)/{id}/copy/{id}", "book_group"); err != nil {
+		t.Fatal(err)
+	}
+
+	testEnforce(t, e, "alice", "/book/1/copy/1", "GET", true)
+	testEnforce(t, e, "alice", "/pen/1/copy/1", "GET", true)
+	testEnforce(t, e, "alice", "/book/1/copy/2", "GET", false)
+	testEnforce(t, e, "alice", "/cup/1/copy/1", "GET", false)
+	if roles, err := e.GetNamedImplicitRolesForUser("g2", "/book/1/copy/1"); err != nil || len(roles) != 1 {
+		t.Errorf("GetNamedImplicitRolesForUser returns %v %v, supposed to be [book_group]", roles, err)
+	}
+}

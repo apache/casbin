@@ -160,6 +160,11 @@ func TestKeyGet2(t *testing.T) {
 	testKeyGet2(t, "/alice/all", "/:id", "id", "")
 
 	testKeyGet2(t, "/alice/all", "/:/all", "", "")
+
+	// Capture groups of the pattern's own must not shift which value a token gets.
+	testKeyGet2(t, "/a/x/42", "/(a|b)/x/:id", "id", "42")
+	testKeyGet2(t, "/42/a", "/:id/(a|b)", "id", "42")
+	testKeyGet2(t, "/b/7/c/9", "/(a|b)/:x/(c|d)/:y", "y", "9")
 }
 
 func testKeyMatch3(t *testing.T, key1 string, key2 string, res bool) {
@@ -247,6 +252,10 @@ func TestKeyGet3(t *testing.T) {
 		"gn", "group_name")
 	testKeyGet3(t, "/api/group1_group_name/project1_admin/info", "/api/{g}_{gn}/{proj}_admin/info",
 		"proj", "project1")
+
+	testKeyGet3(t, "/a/x/42", "/(a|b)/x/{id}", "id", "42")
+	testKeyGet3(t, "/42/a", "/{id}/(a|b)", "id", "42")
+	testKeyGet3(t, "/b/7/c/9", "/(a|b)/{x}/(c|d)/{y}", "y", "9")
 }
 
 func testKeyMatch4(t *testing.T, key1 string, key2 string, res bool) {
@@ -273,6 +282,11 @@ func TestKeyMatch4(t *testing.T) {
 	testKeyMatch4(t, "/parent/123/child/456", "/parent/{id}/child/{id}/book/{id}", false)
 
 	testKeyMatch4(t, "/parent/123/child/123", "/parent/{i/d}/child/{i/d}", false)
+
+	testKeyMatch4(t, "/a/123/child/123", "/(a|b)/{id}/child/{id}", true)
+	testKeyMatch4(t, "/a/123/child/456", "/(a|b)/{id}/child/{id}", false)
+	testKeyMatch4(t, "/c/123/child/123", "/(a|b)/{id}/child/{id}", false)
+	testKeyMatch4(t, "/123/x/123", "/{id}/(x|y)/{id}", true)
 }
 
 func testRegexMatch(t *testing.T, key1 string, key2 string, res bool) {
@@ -518,7 +532,7 @@ func TestKeyGet2Func(t *testing.T) {
 	testKeyGet2Func(t, "myid", "", "/myid/using/myresid", "/:id/using/:resId", "id")
 	testKeyGet2Func(t, "myresid", "", "/myid/using/myresid", "/:id/using/:resId", "resId")
 	testKeyGet2Func(t, "", "", "/myid/using/myresid", "/:id/using/:resId", "missing")
-	testKeyGet2Func(t, "", "keyGet2: error parsing regexp: missing closing ): `^/([^/]+)/(using$`", "/myid/using", "/:id/(using", "id")
+	testKeyGet2Func(t, "", "keyGet2: error parsing regexp: missing closing ): `^/(?P<casbinToken0>[^/]+)/(using$`", "/myid/using", "/:id/(using", "id")
 }
 
 func TestKeyMatch3Func(t *testing.T) {

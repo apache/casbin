@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -84,7 +85,11 @@ func keyMatchShortcut(key1 string, key2 string, extraChars string) (matched bool
 
 // compiledPattern is the fully prepared form of a matcher's key2: the regexp that
 // key1 is tested against, plus the names of the pattern variables in the order
-// their capture groups appear (only KeyGet2/KeyGet3/KeyMatch4 use tokens).
+// they appear and the submatch index of each one's capture group (only
+// KeyGet2/KeyGet3/KeyMatch4 use tokens).
+//
+// The indices are looked up by group name rather than assumed to be 1..n, because
+// key2 can carry capture groups of its own, e.g. "/(a|b)/{id}".
 //
 // Everything in it is a pure function of key2, so it is built once per distinct
 // key2 and reused afterwards. A key2 that does not compile keeps its error here,
@@ -92,12 +97,43 @@ func keyMatchShortcut(key1 string, key2 string, extraChars string) (matched bool
 type compiledPattern struct {
 	re     *regexp.Regexp
 	tokens []string
+	groups []int
 	err    error
+}
+
+// tokenGroup returns the named capture group that stands in for the i-th pattern
+// variable; compilePattern finds it again by tokenGroupName.
+func tokenGroup(i int, expr string) string {
+	return "(?P<" + tokenGroupName(i) + ">" + expr + ")"
+}
+
+func tokenGroupName(i int) string {
+	return "casbinToken" + strconv.Itoa(i)
 }
 
 func compilePattern(expr string, tokens []string) *compiledPattern {
 	re, err := regexp.Compile(expr)
-	return &compiledPattern{re: re, tokens: tokens, err: err}
+	if err != nil {
+		return &compiledPattern{tokens: tokens, err: err}
+	}
+
+	groups := make([]int, len(tokens))
+	for i := range tokens {
+		groups[i] = re.SubexpIndex(tokenGroupName(i))
+	}
+
+	return &compiledPattern{re: re, tokens: tokens, groups: groups}
+}
+
+// replaceTokens replaces every match of tokenRe in key2 with a numbered
+// tokenGroup around expr.
+func replaceTokens(key2 string, tokenRe *regexp.Regexp, expr string) string {
+	i := 0
+	return tokenRe.ReplaceAllStringFunc(key2, func(string) string {
+		group := tokenGroup(i, expr)
+		i++
+		return group
+	})
 }
 
 func (p *compiledPattern) match(key1 string) (bool, error) {
@@ -273,13 +309,13 @@ func keyGet(p *compiledPattern, key1 string, pathVar string) (string, error) {
 		return "", p.err
 	}
 
-	values := p.re.FindAllStringSubmatch(key1, -1)
-	if len(values) == 0 {
+	values := p.re.FindStringSubmatch(key1)
+	if values == nil {
 		return "", nil
 	}
 	for i, key := range p.tokens {
 		if pathVar == key {
-			return values[0][i+1], nil
+			return values[p.groups[i]], nil
 		}
 	}
 	return "", nil
@@ -294,7 +330,7 @@ func buildKeyGet2(key2 string) *compiledPattern {
 		tokens[i] = token[1:]
 	}
 
-	key2 = keyGet2Re1.ReplaceAllString(key2, "$1([^/]+)$2")
+	key2 = replaceTokens(key2, keyGet2Re1, "[^/]+")
 
 	return compilePattern("^"+key2+"$", tokens)
 }
@@ -376,7 +412,7 @@ func buildKeyGet3(key2 string) *compiledPattern {
 		tokens[i] = token[1 : len(token)-1]
 	}
 
-	key2 = keyGet3Re1.ReplaceAllString(key2, "$1([^/]+?)$2")
+	key2 = replaceTokens(key2, keyGet3Re1, "[^/]+?")
 
 	return compilePattern("^"+key2+"$", tokens)
 }
@@ -424,19 +460,15 @@ func keyMatch4(key1 string, key2 string) (bool, error) {
 	if matches == nil {
 		return false, nil
 	}
-	matches = matches[1:]
-
-	if len(p.tokens) != len(matches) {
-		panic(errors.New("KeyMatch4: number of tokens is not equal to number of values"))
-	}
 
 	values := map[string]string{}
 
-	for key, token := range p.tokens {
+	for i, token := range p.tokens {
+		match := matches[p.groups[i]]
 		if _, ok := values[token]; !ok {
-			values[token] = matches[key]
+			values[token] = match
 		}
-		if values[token] != matches[key] {
+		if values[token] != match {
 			return false, nil
 		}
 	}
@@ -450,8 +482,9 @@ func buildKeyMatch4(key2 string) *compiledPattern {
 	tokens := []string{}
 
 	key2 = keyMatch4Re.ReplaceAllStringFunc(key2, func(s string) string {
+		group := tokenGroup(len(tokens), "[^/]+")
 		tokens = append(tokens, s[1:len(s)-1])
-		return "([^/]+)"
+		return group
 	})
 
 	return compilePattern("^"+key2+"$", tokens)
