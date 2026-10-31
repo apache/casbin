@@ -763,6 +763,21 @@ func (e *Enforcer) policyHasDeny(pType string, pTokens map[string]int) (bool, bo
 	return hasDeny, allValid
 }
 
+func (e *Enforcer) effectiveEffectExpr(pType string, pTokens map[string]int, effectExpr string, policyLen int, matcherUsesPolicy bool) string {
+	if policyLen == 0 || !matcherUsesPolicy || effectExpr != constant.AllowAndDenyEffect {
+		return effectExpr
+	}
+	if _, ok := e.eft.(*effector.DefaultEffector); !ok {
+		return effectExpr
+	}
+
+	hasDeny, allValid := e.policyHasDeny(pType, pTokens)
+	if !allValid || hasDeny {
+		return effectExpr
+	}
+	return constant.AllowOverrideEffect
+}
+
 func (e *Enforcer) getPolicyVersion() uint64 {
 	return atomic.LoadUint64(&e.policyVersion)
 }
@@ -885,17 +900,9 @@ func (e *Enforcer) enforce(matcher string, explains *[]string, rvals ...interfac
 			rvals)
 	}
 
-	effectExpr := e.model["e"][eType].Value
 	policyLen := len(e.model["p"][pType].Policy)
-	if policyLen != 0 && strings.Contains(expString, pType+"_") {
-		if _, ok := e.eft.(*effector.DefaultEffector); ok {
-			if effectExpr == constant.AllowAndDenyEffect {
-				if hasDeny, allValid := e.policyHasDeny(pType, pTokens); allValid && !hasDeny {
-					effectExpr = constant.AllowOverrideEffect
-				}
-			}
-		}
-	}
+	matcherUsesPolicy := strings.Contains(expString, pType+"_")
+	effectExpr := e.effectiveEffectExpr(pType, pTokens, e.model["e"][eType].Value, policyLen, matcherUsesPolicy)
 
 	var bucketIDs []uint32
 	var requestBucket uint32
@@ -911,7 +918,7 @@ func (e *Enforcer) enforce(matcher string, explains *[]string, rvals ...interfac
 	var effect effector.Effect
 	var explainIndex int
 
-	if policyLen != 0 && strings.Contains(expString, pType+"_") { //nolint:nestif // TODO: reduce function complexity
+	if policyLen != 0 && matcherUsesPolicy { //nolint:nestif // TODO: reduce function complexity
 		policyEffects = make([]effector.Effect, policyLen)
 		matcherResults = make([]float64, policyLen)
 
