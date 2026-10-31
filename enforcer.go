@@ -25,6 +25,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/casbin/casbin/v3/constant"
 	"github.com/casbin/casbin/v3/detector"
 	"github.com/casbin/casbin/v3/effector"
 	"github.com/casbin/casbin/v3/log"
@@ -47,14 +48,16 @@ type Enforcer struct {
 	fm        model.FunctionMap
 	eft       effector.Effector
 
-	adapter    persist.Adapter
-	watcher    persist.Watcher
-	dispatcher persist.Dispatcher
-	rmMap      map[string]rbac.RoleManager
-	condRmMap  map[string]rbac.ConditionalRoleManager
-	matcherMap sync.Map
-	logger     log.Logger
-	detectors  []detector.Detector
+	adapter       persist.Adapter
+	watcher       persist.Watcher
+	dispatcher    persist.Dispatcher
+	rmMap         map[string]rbac.RoleManager
+	condRmMap     map[string]rbac.ConditionalRoleManager
+	matcherMap    sync.Map
+	policyIndexes sync.Map
+	denyCache     sync.Map
+	logger        log.Logger
+	detectors     []detector.Detector
 
 	enabled              bool
 	autoSave             bool
@@ -179,6 +182,7 @@ func (e *Enforcer) InitWithModelAndAdapter(m model.Model, adapter persist.Adapte
 	e.model = m
 	e.model.PrintModel()
 	e.fm = model.LoadFunctionMap()
+	e.resetPolicyCaches()
 
 	e.initialize()
 
@@ -242,6 +246,7 @@ func (e *Enforcer) GetModel() model.Model {
 func (e *Enforcer) SetModel(m model.Model) {
 	e.model = m
 	e.fm = model.LoadFunctionMap()
+	e.resetPolicyCaches()
 
 	e.initialize()
 }
@@ -455,6 +460,7 @@ func (e *Enforcer) applyModifiedModel(newModel model.Model) error {
 	}
 
 	e.model = newModel
+	e.resetPolicyCaches()
 	e.invalidateMatcherMap()
 	return nil
 }
@@ -716,6 +722,47 @@ func (e *Enforcer) invalidateMatcherMap() {
 	e.bumpPolicyVersion()
 }
 
+func (e *Enforcer) resetPolicyCaches() {
+	e.policyIndexes.Range(func(_, value interface{}) bool {
+		value.(*policyIndex).reset()
+		return true
+	})
+	e.denyCache.Range(func(key, _ interface{}) bool {
+		e.denyCache.Delete(key)
+		return true
+	})
+}
+
+type denyCacheEntry struct {
+	version  uint64
+	hasDeny  bool
+	allValid bool
+}
+
+func (e *Enforcer) policyHasDeny(pType string, pTokens map[string]int) (bool, bool) {
+	ast := e.model["p"][pType]
+	if value, ok := e.denyCache.Load(pType); ok {
+		entry := value.(denyCacheEntry)
+		if entry.version == ast.PolicyVersion {
+			return entry.hasDeny, entry.allValid
+		}
+	}
+
+	eftIndex, hasEft := pTokens[pType+"_eft"]
+	hasDeny, allValid := false, true
+	for _, rule := range ast.Policy {
+		if len(rule) != len(ast.Tokens) {
+			allValid = false
+		}
+		if hasEft && eftIndex < len(rule) && rule[eftIndex] == "deny" {
+			hasDeny = true
+		}
+	}
+
+	e.denyCache.Store(pType, denyCacheEntry{version: ast.PolicyVersion, hasDeny: hasDeny, allValid: allValid})
+	return hasDeny, allValid
+}
+
 func (e *Enforcer) getPolicyVersion() uint64 {
 	return atomic.LoadUint64(&e.policyVersion)
 }
@@ -838,13 +885,33 @@ func (e *Enforcer) enforce(matcher string, explains *[]string, rvals ...interfac
 			rvals)
 	}
 
+	effectExpr := e.model["e"][eType].Value
+	policyLen := len(e.model["p"][pType].Policy)
+	if policyLen != 0 && strings.Contains(expString, pType+"_") {
+		if _, ok := e.eft.(*effector.DefaultEffector); ok {
+			if effectExpr == constant.AllowAndDenyEffect {
+				if hasDeny, allValid := e.policyHasDeny(pType, pTokens); allValid && !hasDeny {
+					effectExpr = constant.AllowOverrideEffect
+				}
+			}
+		}
+	}
+
+	var bucketIDs []uint32
+	var requestBucket uint32
+	var usePolicyIndex bool
+	if pIndex := e.getPolicyIndex(pType); pIndex != nil {
+		bucketIDs = pIndex.ensureBuilt(e.model["p"][pType])
+		requestBucket, usePolicyIndex = pIndex.requestBucket(rvals)
+	}
+
 	var policyEffects []effector.Effect
 	var matcherResults []float64
 
 	var effect effector.Effect
 	var explainIndex int
 
-	if policyLen := len(e.model["p"][pType].Policy); policyLen != 0 && strings.Contains(expString, pType+"_") { //nolint:nestif // TODO: reduce function complexity
+	if policyLen != 0 && strings.Contains(expString, pType+"_") { //nolint:nestif // TODO: reduce function complexity
 		policyEffects = make([]effector.Effect, policyLen)
 		matcherResults = make([]float64, policyLen)
 
@@ -858,6 +925,33 @@ func (e *Enforcer) enforce(matcher string, explains *[]string, rvals ...interfac
 					pvals)
 			}
 
+			if j, ok := pTokens[pType+"_eft"]; ok {
+				eft := pvals[j]
+				switch eft {
+				case "allow":
+					policyEffects[policyIndex] = effector.Allow
+				case "deny":
+					policyEffects[policyIndex] = effector.Deny
+				default:
+					policyEffects[policyIndex] = effector.Indeterminate
+				}
+			} else {
+				policyEffects[policyIndex] = effector.Allow
+			}
+
+			// set to no-match at first
+			matcherResults[policyIndex] = 0
+			if usePolicyIndex && !policyMatchesBucket(bucketIDs, policyIndex, requestBucket) {
+				effect, explainIndex, err = e.eft.MergeEffects(effectExpr, policyEffects, matcherResults, policyIndex, policyLen)
+				if err != nil {
+					return false, err
+				}
+				if effect != effector.Indeterminate {
+					break
+				}
+				continue
+			}
+
 			parameters.pVals = pvals
 
 			result, err := expression.Eval(parameters)
@@ -866,8 +960,6 @@ func (e *Enforcer) enforce(matcher string, explains *[]string, rvals ...interfac
 				return false, err
 			}
 
-			// set to no-match at first
-			matcherResults[policyIndex] = 0
 			switch result := result.(type) {
 			case bool:
 				if result {
@@ -881,25 +973,11 @@ func (e *Enforcer) enforce(matcher string, explains *[]string, rvals ...interfac
 				return false, errors.New("matcher result should be bool, int or float")
 			}
 
-			if j, ok := parameters.pTokens[pType+"_eft"]; ok {
-				eft := parameters.pVals[j]
-				switch eft {
-				case "allow":
-					policyEffects[policyIndex] = effector.Allow
-				case "deny":
-					policyEffects[policyIndex] = effector.Deny
-				default:
-					policyEffects[policyIndex] = effector.Indeterminate
-				}
-			} else {
-				policyEffects[policyIndex] = effector.Allow
-			}
-
 			// if e.model["e"]["e"].Value == "priority(p_eft) || deny" {
 			//	break
 			// }
 
-			effect, explainIndex, err = e.eft.MergeEffects(e.model["e"][eType].Value, policyEffects, matcherResults, policyIndex, policyLen)
+			effect, explainIndex, err = e.eft.MergeEffects(effectExpr, policyEffects, matcherResults, policyIndex, policyLen)
 			if err != nil {
 				return false, err
 			}
@@ -929,7 +1007,7 @@ func (e *Enforcer) enforce(matcher string, explains *[]string, rvals ...interfac
 			policyEffects[0] = effector.Indeterminate
 		}
 
-		effect, explainIndex, err = e.eft.MergeEffects(e.model["e"][eType].Value, policyEffects, matcherResults, 0, 1)
+		effect, explainIndex, err = e.eft.MergeEffects(effectExpr, policyEffects, matcherResults, 0, 1)
 		if err != nil {
 			return false, err
 		}

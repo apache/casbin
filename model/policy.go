@@ -102,11 +102,13 @@ func (model Model) ClearPolicy() {
 	for _, ast := range model["p"] {
 		ast.Policy = nil
 		ast.PolicyMap = map[string]int{}
+		ast.PolicyVersion++
 	}
 
 	for _, ast := range model["g"] {
 		ast.Policy = nil
 		ast.PolicyMap = map[string]int{}
+		ast.PolicyVersion++
 	}
 }
 
@@ -204,6 +206,7 @@ func (model Model) AddPolicy(sec string, ptype string, rule []string) error {
 	}
 	assertion.Policy = append(assertion.Policy, rule)
 	assertion.PolicyMap[strings.Join(rule, DefaultSep)] = len(model[sec][ptype].Policy) - 1
+	assertion.PolicyVersion++
 
 	hasPriority := false
 	if _, ok := assertion.FieldIndexMap[constant.PriorityIndex]; ok {
@@ -276,6 +279,7 @@ func (model Model) RemovePolicy(sec string, ptype string, rule []string) (bool, 
 	for i := index; i < len(ast.Policy); i++ {
 		ast.PolicyMap[strings.Join(ast.Policy[i], DefaultSep)] = i
 	}
+	ast.PolicyVersion++
 	return true, nil
 }
 
@@ -294,6 +298,7 @@ func (model Model) UpdatePolicy(sec string, ptype string, oldRule []string, newR
 	model[sec][ptype].Policy[index] = newRule
 	delete(model[sec][ptype].PolicyMap, oldPolicy)
 	model[sec][ptype].PolicyMap[strings.Join(newRule, DefaultSep)] = index
+	model[sec][ptype].PolicyVersion++
 
 	return true, nil
 }
@@ -327,6 +332,7 @@ func (model Model) UpdatePolicies(sec string, ptype string, oldRules, newRules [
 		assertion.Policy[indexes[i]] = newRule
 		assertion.PolicyMap[strings.Join(newRule, DefaultSep)] = indexes[i]
 	}
+	assertion.PolicyVersion++
 
 	return true, nil
 }
@@ -376,6 +382,7 @@ func (model Model) RemovePoliciesWithAffected(sec string, ptype string, rules []
 
 	assertion.Policy = compactPolicy
 	assertion.PolicyMap = compactPolicyMap
+	assertion.PolicyVersion++
 
 	return affected, nil
 }
@@ -410,6 +417,7 @@ func (model Model) RemoveFilteredPolicy(sec string, ptype string, fieldIndex int
 
 	if len(tmp) != len(model[sec][ptype].Policy) {
 		model[sec][ptype].Policy = tmp
+		model[sec][ptype].PolicyVersion++
 		res = true
 	}
 

@@ -34,6 +34,7 @@ type Assertion struct {
 	ParamsTokens    []string
 	Policy          [][]string
 	PolicyMap       map[string]int
+	PolicyVersion   uint64
 	RM              rbac.RoleManager
 	CondRM          rbac.ConditionalRoleManager
 	FieldIndexMap   map[string]int
@@ -190,6 +191,7 @@ func (ast *Assertion) copy() *Assertion {
 		Key:           ast.Key,
 		Value:         ast.Value,
 		PolicyMap:     policyMap,
+		PolicyVersion: ast.PolicyVersion,
 		Tokens:        tokens,
 		Policy:        policy,
 		FieldIndexMap: fieldIndexMap,

@@ -265,6 +265,7 @@ func (model Model) SortPoliciesBySubjectHierarchy() error {
 		for i, policy := range assertion.Policy {
 			assertion.PolicyMap[strings.Join(policy, ",")] = i
 		}
+		assertion.PolicyVersion++
 	}
 	return nil
 }
@@ -345,6 +346,7 @@ func (model Model) SortPoliciesByPriority() error {
 		for i, policy := range assertion.Policy {
 			assertion.PolicyMap[strings.Join(policy, ",")] = i
 		}
+		assertion.PolicyVersion++
 	}
 	return nil
 }
