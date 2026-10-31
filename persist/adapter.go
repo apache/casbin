@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"encoding/csv"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/casbin/casbin/v3/model"
@@ -49,7 +50,8 @@ func LoadPolicyLine(line string, m model.Model) error {
 // Fields are separated by ", " to match the conventional layout of Casbin policy
 // files, which LoadPolicyLine accepts because its reader trims leading spaces.
 // Fields containing commas are properly quoted so the line can be round-tripped
-// through LoadPolicyLine without corruption.
+// through LoadPolicyLine without corruption. Fields containing a line break are
+// rejected, because policy lines are loaded one physical line at a time.
 func PolicyLineToCsv(ptype string, rule []string) (string, error) {
 	record := append([]string{ptype}, rule...)
 
@@ -59,6 +61,10 @@ func PolicyLineToCsv(ptype string, rule []string) (string, error) {
 	w := csv.NewWriter(&buf)
 	fields := make([]string, 0, len(record))
 	for _, field := range record {
+		if strings.Contains(field, "\n") {
+			return "", fmt.Errorf("invalid policy field %q: line breaks are not allowed", field)
+		}
+
 		buf.Reset()
 		if err := w.Write([]string{field}); err != nil {
 			return "", err
