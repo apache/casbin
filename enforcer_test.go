@@ -187,6 +187,35 @@ m = g(r.sub, p.sub) && r.obj == p.obj && r.act == p.act
 	testEnforce(t, e, "bob", "data2", "write", true)
 }
 
+func TestCommentMarkerInMatcherString(t *testing.T) {
+	text := `
+[request_definition]
+r = sub, obj, act
+
+[policy_definition]
+p = sub, obj, act
+
+[policy_effect]
+e = some(where (p.eft == allow))
+
+[matchers]
+m = r.sub == p.sub && (r.act == "#write" || r.obj == 'a;b') # comment
+`
+	m, err := model.NewModelFromString(text)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, err := NewEnforcer(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = e.AddPolicy("alice", "data1", "read")
+
+	testEnforce(t, e, "alice", "data1", "#write", true)
+	testEnforce(t, e, "alice", "a;b", "read", true)
+	testEnforce(t, e, "alice", "data1", "read", false)
+}
+
 func TestNotUsedRBACModelInMemory(t *testing.T) {
 	m := model.NewModel()
 	m.AddDef("r", "r", "sub, obj, act")

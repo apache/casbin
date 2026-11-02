@@ -50,6 +50,9 @@ func TestGet(t *testing.T) {
 	if v := config.String("mysql::mysql.master.user"); v != "root" {
 		t.Errorf("Get failure: expected different value for mysql::mysql.master.user (expected: [%#v] got: [%#v])", "root", v)
 	}
+	if v := config.String("mysql::mysql.master.note"); v != `"a#b;c" 'd#e'` {
+		t.Errorf("Get failure: expected different value for mysql::mysql.master.note (expected: [%#v] got: [%#v])", `"a#b;c" 'd#e'`, v)
+	}
 	if v := config.String("mysql::mysql.master.pass"); v != "89dds)2$" {
 		t.Errorf("Get failure: expected different value for mysql::mysql.master.pass (expected: [%#v] got: [%#v])", "89dds)2$", v)
 	}

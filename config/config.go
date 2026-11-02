@@ -153,9 +153,16 @@ func (c *Config) parseBuffer(buf *bufio.Reader) error {
 				canWrite = true
 			}
 
+			// a comment marker inside a quoted string is part of the value
 			end := len(p)
-			for i, value := range p {
-				if value == DEFAULT_COMMENT[0] || value == DEFAULT_COMMENT_SEM[0] {
+			for i := 0; i < len(p); i++ {
+				if p[i] == '"' || p[i] == '\'' {
+					j := bytes.IndexByte(p[i+1:], p[i])
+					if j < 0 {
+						break
+					}
+					i += j + 1
+				} else if p[i] == DEFAULT_COMMENT[0] || p[i] == DEFAULT_COMMENT_SEM[0] {
 					end = i
 					break
 				}

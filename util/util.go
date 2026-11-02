@@ -48,18 +48,7 @@ func EscapeAssertion(s string) string {
 		if quote != '"' && quote != '\'' {
 			continue
 		}
-		end := i + 1
-		for end < len(s) && s[end] != quote {
-			if s[end] == '\\' {
-				end++
-			}
-			end++
-		}
-		if end < len(s) {
-			end++
-		} else {
-			end = len(s)
-		}
+		end := stringLiteralEnd(s, i)
 		b.WriteString(escapeAssertionUnquoted(s[start:i]))
 		b.WriteString(s[i:end])
 		start = end
@@ -67,6 +56,16 @@ func EscapeAssertion(s string) string {
 	}
 	b.WriteString(escapeAssertionUnquoted(s[start:]))
 	return b.String()
+}
+
+// stringLiteralEnd returns the index just past the string literal that opens at s[i].
+// A backslash is not an escape character in matchers (see EscapeStringLiterals), so the
+// literal ends at the next matching quote, or at the end of s when it is not closed.
+func stringLiteralEnd(s string, i int) int {
+	if j := strings.IndexByte(s[i+1:], s[i]); j >= 0 {
+		return i + j + 2
+	}
+	return len(s)
 }
 
 func escapeAssertionUnquoted(s string) string {
@@ -81,12 +80,17 @@ func escapeAssertionUnquoted(s string) string {
 }
 
 // RemoveComments removes the comments starting with # in the text.
+// A # inside a quoted string literal is part of the literal.
 func RemoveComments(s string) string {
-	pos := strings.Index(s, "#")
-	if pos == -1 {
-		return s
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '#':
+			return strings.TrimSpace(s[:i])
+		case '"', '\'':
+			i = stringLiteralEnd(s, i) - 1
+		}
 	}
-	return strings.TrimSpace(s[0:pos])
+	return s
 }
 
 // ArrayEquals determines whether two string arrays are identical.

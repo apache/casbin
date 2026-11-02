@@ -55,7 +55,7 @@ func TestEscapeAssertion(t *testing.T) {
 	testEscapeAssertion(t, `r.sub == "test.p.value"`, `r_sub == "test.p.value"`)
 	testEscapeAssertion(t, `r.obj == "https://p.example.com"`, `r_obj == "https://p.example.com"`)
 	testEscapeAssertion(t, `r.obj == 'https://p.example.com' && p.sub == r.sub`, `r_obj == 'https://p.example.com' && p_sub == r_sub`)
-	testEscapeAssertion(t, `keyMatch(r.obj, "/p.*") || r.obj == "a\"/r.b"`, `keyMatch(r_obj, "/p.*") || r_obj == "a\"/r.b"`)
+	testEscapeAssertion(t, `keyMatch(r.obj, "/p.*") || r.obj == "a\" && r.sub == p.sub`, `keyMatch(r_obj, "/p.*") || r_obj == "a\" && r_sub == p_sub`)
 }
 
 func testRemoveComments(t *testing.T, s string, res string) {
@@ -74,6 +74,10 @@ func TestRemoveComments(t *testing.T) {
 	testRemoveComments(t, "r.act == p.act###", "r.act == p.act")
 	testRemoveComments(t, "### comments", "")
 	testRemoveComments(t, "r.act == p.act", "r.act == p.act")
+	testRemoveComments(t, `r.act == "#write" && r.sub == p.sub`, `r.act == "#write" && r.sub == p.sub`)
+	testRemoveComments(t, `r.act == '#write' # it's a comment`, `r.act == '#write'`)
+	testRemoveComments(t, `r.act == "a\" # comments`, `r.act == "a\"`)
+	testRemoveComments(t, `r.act == "#write`, `r.act == "#write`)
 }
 
 func testArrayEquals(t *testing.T, a []string, b []string, res bool) {
