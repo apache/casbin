@@ -187,6 +187,38 @@ m = g(r.sub, p.sub) && r.obj == p.obj && r.act == p.act
 	testEnforce(t, e, "bob", "data2", "write", true)
 }
 
+// A "#" inside a string literal of the matcher is part of the value, not the
+// start of a comment, so the matcher must still be usable.
+func TestMatcherWithStringLiteralContainingHash(t *testing.T) {
+	text := `
+[request_definition]
+r = sub, obj, act
+
+[policy_definition]
+p = sub, obj, act
+
+[policy_effect]
+e = some(where (p.eft == allow))
+
+[matchers]
+m = r.sub == p.sub && r.act == "#write" # only writing is allowed
+`
+	m, err := model.NewModelFromString(text)
+	if err != nil {
+		t.Fatalf("NewModelFromString: %v", err)
+	}
+
+	e, err := NewEnforcer(m)
+	if err != nil {
+		t.Fatalf("NewEnforcer: %v", err)
+	}
+
+	_, _ = e.AddPolicy("alice", "data1", "#write")
+
+	testEnforce(t, e, "alice", "data1", "#write", true)
+	testEnforce(t, e, "alice", "data1", "read", false)
+}
+
 func TestNotUsedRBACModelInMemory(t *testing.T) {
 	m := model.NewModel()
 	m.AddDef("r", "r", "sub, obj, act")

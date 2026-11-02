@@ -74,6 +74,14 @@ func TestRemoveComments(t *testing.T) {
 	testRemoveComments(t, "r.act == p.act###", "r.act == p.act")
 	testRemoveComments(t, "### comments", "")
 	testRemoveComments(t, "r.act == p.act", "r.act == p.act")
+	// "#" inside a string literal is part of the value, not the start of a comment.
+	testRemoveComments(t, `r.act == "#write" && r.sub == p.sub`, `r.act == "#write" && r.sub == p.sub`)
+	testRemoveComments(t, `r.act == '#write' && r.sub == p.sub`, `r.act == '#write' && r.sub == p.sub`)
+	testRemoveComments(t, `r.act == "#write" # comments`, `r.act == "#write"`)
+	testRemoveComments(t, `r.act == "a\"#write" && r.sub == p.sub`, `r.act == "a\"#write" && r.sub == p.sub`)
+	testRemoveComments(t, `r.act == "#write" # it's a comment`, `r.act == "#write"`)
+	// An unterminated literal is left to the expression parser, which reports it.
+	testRemoveComments(t, `r.act == "#write`, `r.act == "`)
 }
 
 func testArrayEquals(t *testing.T, a []string, b []string, res bool) {

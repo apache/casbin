@@ -48,18 +48,7 @@ func EscapeAssertion(s string) string {
 		if quote != '"' && quote != '\'' {
 			continue
 		}
-		end := i + 1
-		for end < len(s) && s[end] != quote {
-			if s[end] == '\\' {
-				end++
-			}
-			end++
-		}
-		if end < len(s) {
-			end++
-		} else {
-			end = len(s)
-		}
+		end, _ := stringLiteralEnd(s, i)
 		b.WriteString(escapeAssertionUnquoted(s[start:i]))
 		b.WriteString(s[i:end])
 		start = end
@@ -67,6 +56,24 @@ func EscapeAssertion(s string) string {
 	}
 	b.WriteString(escapeAssertionUnquoted(s[start:]))
 	return b.String()
+}
+
+// stringLiteralEnd returns the index just past the closing quote of the string
+// literal that opens at s[i], where s[i] is the opening quote; a backslash
+// escapes the character after it. closed is false when the literal is never
+// terminated, and the end of s is returned in that case.
+func stringLiteralEnd(s string, i int) (end int, closed bool) {
+	quote := s[i]
+	for j := i + 1; j < len(s); j++ {
+		if s[j] == '\\' {
+			j++
+			continue
+		}
+		if s[j] == quote {
+			return j + 1, true
+		}
+	}
+	return len(s), false
 }
 
 func escapeAssertionUnquoted(s string) string {
@@ -81,12 +88,22 @@ func escapeAssertionUnquoted(s string) string {
 }
 
 // RemoveComments removes the comments starting with # in the text.
+// A # inside a quoted string literal belongs to the value, so only a # outside
+// of a terminated literal starts a comment.
 func RemoveComments(s string) string {
-	pos := strings.Index(s, "#")
-	if pos == -1 {
-		return s
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '#':
+			return strings.TrimSpace(s[0:i])
+		case '"', '\'':
+			end, closed := stringLiteralEnd(s, i)
+			if !closed {
+				continue
+			}
+			i = end - 1
+		}
 	}
-	return strings.TrimSpace(s[0:pos])
+	return s
 }
 
 // ArrayEquals determines whether two string arrays are identical.

@@ -91,3 +91,36 @@ func TestGet(t *testing.T) {
 		t.Errorf("Get failure: expected different value for multi5::name (expected: [%#v] got: [%#v])", "r.sub==p.sub&&r.obj==p.obj", v)
 	}
 }
+
+func TestCommentMarkerInsideQuotedValue(t *testing.T) {
+	text := `
+[matchers]
+hash = r.sub == p.sub && r.act == "#write"
+hashsingle = r.sub == p.sub && r.act == '#write'
+hashescaped = r.sub == p.sub && r.act == "a\"#write"
+comment = r.sub == p.sub # a comment
+commentsem = r.sub == p.sub; a comment
+commentboth = r.sub == "#write" # a comment
+`
+	cfg, err := NewConfigFromText(text)
+	if err != nil {
+		t.Fatalf("NewConfigFromText: %v", err)
+	}
+
+	cases := []struct {
+		key  string
+		want string
+	}{
+		{"hash", `r.sub == p.sub && r.act == "#write"`},
+		{"hashsingle", `r.sub == p.sub && r.act == '#write'`},
+		{"hashescaped", `r.sub == p.sub && r.act == "a\"#write"`},
+		{"comment", `r.sub == p.sub`},
+		{"commentsem", `r.sub == p.sub`},
+		{"commentboth", `r.sub == "#write"`},
+	}
+	for _, c := range cases {
+		if v := cfg.String("matchers::" + c.key); v != c.want {
+			t.Errorf("Get failure: %s::%s expected: [%#v] got: [%#v]", "matchers", c.key, c.want, v)
+		}
+	}
+}

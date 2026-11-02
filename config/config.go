@@ -153,20 +153,51 @@ func (c *Config) parseBuffer(buf *bufio.Reader) error {
 				canWrite = true
 			}
 
-			end := len(p)
-			for i, value := range p {
-				if value == DEFAULT_COMMENT[0] || value == DEFAULT_COMMENT_SEM[0] {
-					end = i
-					break
-				}
-			}
-			if _, err := buffer.Write(p[:end]); err != nil {
+			if _, err := buffer.Write(p[:optionValueEnd(p)]); err != nil {
 				return err
 			}
 		}
 	}
 
 	return nil
+}
+
+// optionValueEnd returns where the value of a config line ends: the first "#" or
+// ";" starts a comment, otherwise the end of the line. A comment marker inside a
+// quoted value belongs to that value, so the literal is skipped; an unterminated
+// literal is left alone so that the missing quote, rather than a silently
+// shortened value, is what the caller reports.
+func optionValueEnd(p []byte) int {
+	for i := 0; i < len(p); i++ {
+		switch p[i] {
+		case DEFAULT_COMMENT[0], DEFAULT_COMMENT_SEM[0]:
+			return i
+		case '"', '\'':
+			end, closed := stringLiteralEnd(p, i)
+			if closed {
+				i = end - 1
+			}
+		}
+	}
+	return len(p)
+}
+
+// stringLiteralEnd returns the index just past the closing quote of the string
+// literal that opens at p[i], where p[i] is the opening quote; a backslash
+// escapes the character after it. closed is false when the literal is never
+// terminated, and the end of p is returned in that case.
+func stringLiteralEnd(p []byte, i int) (end int, closed bool) {
+	quote := p[i]
+	for j := i + 1; j < len(p); j++ {
+		if p[j] == '\\' {
+			j++
+			continue
+		}
+		if p[j] == quote {
+			return j + 1, true
+		}
+	}
+	return len(p), false
 }
 
 func (c *Config) write(section string, lineNum int, b *bytes.Buffer) error {
