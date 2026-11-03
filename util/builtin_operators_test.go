@@ -332,6 +332,33 @@ func testIPMatch(t *testing.T, ip1 string, ip2 string, res bool) {
 	}
 }
 
+func TestIPMatchInvalidInput(t *testing.T) {
+	// An invalid argument matches nothing instead of panicking,
+	// mirroring the RegexMatch convention: the plain function returns
+	// false and the Func wrapper reports the error.
+	if IPMatch("192.168.1.abc", "192.168.1.0/24") {
+		t.Errorf("IPMatch(192.168.1.abc, 192.168.1.0/24): got true, expected false")
+	}
+	if IPMatch("192.168.2.123", "not-an-ip") {
+		t.Errorf("IPMatch(192.168.2.123, not-an-ip): got true, expected false")
+	}
+
+	_, err := ipMatch("192.168.1.abc", "192.168.1.0/24")
+	if err == nil {
+		t.Errorf("ipMatch(192.168.1.abc, ...): expected an error, got nil")
+	}
+
+	_, err = IPMatchFunc("192.168.1.abc", "192.168.1.0/24")
+	if err == nil || err.Error() != "ipMatch: invalid argument: ip1 in IPMatch() function is not an IP address." {
+		t.Errorf("IPMatchFunc(192.168.1.abc, ...): unexpected error: %v", err)
+	}
+
+	_, err = IPMatchFunc("192.168.2.123", "not-an-ip")
+	if err == nil || err.Error() != "ipMatch: invalid argument: ip2 in IPMatch() function is neither an IP address nor a CIDR." {
+		t.Errorf("IPMatchFunc(..., not-an-ip): unexpected error: %v", err)
+	}
+}
+
 func TestIPMatch(t *testing.T) {
 	testIPMatch(t, "192.168.2.123", "192.168.2.0/24", true)
 	testIPMatch(t, "192.168.2.123", "192.168.3.0/24", false)
