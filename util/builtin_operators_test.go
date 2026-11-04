@@ -340,6 +340,8 @@ func TestIPMatch(t *testing.T) {
 	testIPMatch(t, "192.168.2.123", "192.168.2.123/32", true)
 	testIPMatch(t, "10.0.0.11", "10.0.0.0/8", true)
 	testIPMatch(t, "11.0.0.123", "10.0.0.0/8", false)
+	testIPMatch(t, "192.168.2.abc", "192.168.2.0/24", false)
+	testIPMatch(t, "192.168.2.123", "not-an-ip", false)
 }
 
 func testRegexMatchFunc(t *testing.T, res bool, err string, args ...interface{}) {
@@ -631,6 +633,8 @@ func TestIPMatchFunc(t *testing.T) {
 	testIPMatchFunc(t, false, "ipMatch: expected 2 arguments, but got 1", "192.168.2.123")
 	testIPMatchFunc(t, false, "ipMatch: argument must be a string", "192.168.2.123", 128)
 	testIPMatchFunc(t, true, "", "192.168.2.123", "192.168.2.0/24")
+	testIPMatchFunc(t, false, `ipMatch: "192.168.2.abc" is not an IP address`, "192.168.2.abc", "192.168.2.0/24")
+	testIPMatchFunc(t, false, `ipMatch: "not-an-ip" is neither an IP address nor a CIDR`, "192.168.2.123", "not-an-ip")
 }
 
 func TestGlobMatch(t *testing.T) {

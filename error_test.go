@@ -320,6 +320,20 @@ func TestInvalidPatternInPolicy(t *testing.T) {
 	}
 }
 
+func TestInvalidIPInRequest(t *testing.T) {
+	e, err := NewEnforcer("examples/ipmatch_model.conf", "examples/ipmatch_policy.csv")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = e.Enforce("192.168.2.abc", "data1", "read")
+	if err == nil || strings.HasPrefix(err.Error(), "panic:") ||
+		!strings.Contains(err.Error(), `ipMatch: "192.168.2.abc" is not an IP address`) {
+		t.Errorf("Enforce returns %v, supposed to be an ipMatch argument error", err)
+	}
+	testEnforce(t, e, "192.168.2.1", "data1", "read", true)
+}
+
 func TestPatternWithCaptureGroupInPolicy(t *testing.T) {
 	e, err := NewEnforcer("examples/rbac_with_pattern_model.conf")
 	if err != nil {

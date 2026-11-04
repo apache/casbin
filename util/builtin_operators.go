@@ -588,23 +588,29 @@ func RegexMatchFunc(args ...interface{}) (interface{}, error) {
 
 // IPMatch determines whether IP address ip1 matches the pattern of IP address ip2, ip2 can be an IP address or a CIDR pattern.
 // For example, "192.168.2.123" matches "192.168.2.0/24".
+// An invalid argument matches nothing; IPMatchFunc reports it as an error.
 func IPMatch(ip1 string, ip2 string) bool {
+	matched, _ := ipMatch(ip1, ip2)
+	return matched
+}
+
+func ipMatch(ip1 string, ip2 string) (bool, error) {
 	objIP1 := net.ParseIP(ip1)
 	if objIP1 == nil {
-		panic("invalid argument: ip1 in IPMatch() function is not an IP address.")
+		return false, fmt.Errorf("%q is not an IP address", ip1)
 	}
 
 	_, cidr, err := net.ParseCIDR(ip2)
-	if err != nil {
-		objIP2 := net.ParseIP(ip2)
-		if objIP2 == nil {
-			panic("invalid argument: ip2 in IPMatch() function is neither an IP address nor a CIDR.")
-		}
-
-		return objIP1.Equal(objIP2)
+	if err == nil {
+		return cidr.Contains(objIP1), nil
 	}
 
-	return cidr.Contains(objIP1)
+	objIP2 := net.ParseIP(ip2)
+	if objIP2 == nil {
+		return false, fmt.Errorf("%q is neither an IP address nor a CIDR", ip2)
+	}
+
+	return objIP1.Equal(objIP2), nil
 }
 
 // IPMatchFunc is the wrapper for IPMatch.
@@ -616,7 +622,12 @@ func IPMatchFunc(args ...interface{}) (interface{}, error) {
 	ip1 := args[0].(string)
 	ip2 := args[1].(string)
 
-	return IPMatch(ip1, ip2), nil
+	matched, err := ipMatch(ip1, ip2)
+	if err != nil {
+		return false, fmt.Errorf("%s: %w", "ipMatch", err)
+	}
+
+	return matched, nil
 }
 
 // GlobMatch determines whether key1 matches the pattern of key2 using glob pattern.
