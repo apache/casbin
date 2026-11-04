@@ -597,14 +597,14 @@ func IPMatch(ip1 string, ip2 string) bool {
 func ipMatch(ip1 string, ip2 string) (bool, error) {
 	objIP1 := net.ParseIP(ip1)
 	if objIP1 == nil {
-		return false, errors.New("invalid argument: ip1 in IPMatch() function is not an IP address.")
+		return false, errors.New("invalid argument: ip1 in IPMatch() function is not an IP address")
 	}
 
 	_, cidr, err := net.ParseCIDR(ip2)
 	if err != nil {
 		objIP2 := net.ParseIP(ip2)
 		if objIP2 == nil {
-			return false, errors.New("invalid argument: ip2 in IPMatch() function is neither an IP address nor a CIDR.")
+			return false, errors.New("invalid argument: ip2 in IPMatch() function is neither an IP address nor a CIDR")
 		}
 
 		return objIP1.Equal(objIP2), nil

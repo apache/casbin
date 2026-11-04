@@ -349,12 +349,12 @@ func TestIPMatchInvalidInput(t *testing.T) {
 	}
 
 	_, err = IPMatchFunc("192.168.1.abc", "192.168.1.0/24")
-	if err == nil || err.Error() != "ipMatch: invalid argument: ip1 in IPMatch() function is not an IP address." {
+	if err == nil || err.Error() != "ipMatch: invalid argument: ip1 in IPMatch() function is not an IP address" {
 		t.Errorf("IPMatchFunc(192.168.1.abc, ...): unexpected error: %v", err)
 	}
 
 	_, err = IPMatchFunc("192.168.2.123", "not-an-ip")
-	if err == nil || err.Error() != "ipMatch: invalid argument: ip2 in IPMatch() function is neither an IP address nor a CIDR." {
+	if err == nil || err.Error() != "ipMatch: invalid argument: ip2 in IPMatch() function is neither an IP address nor a CIDR" {
 		t.Errorf("IPMatchFunc(..., not-an-ip): unexpected error: %v", err)
 	}
 }
