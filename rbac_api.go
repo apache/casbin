@@ -625,7 +625,7 @@ func (e *Enforcer) GetImplicitUsersForResourceByDomain(resource string, domain s
 
 	for _, rule := range e.model["p"]["p"].Policy {
 		obj := rule[objectIndex]
-		if obj != resource {
+		if obj != resource || rule[domIndex] != domain {
 			continue
 		}
 
@@ -634,9 +634,6 @@ func (e *Enforcer) GetImplicitUsersForResourceByDomain(resource string, domain s
 		if !isRole[sub] {
 			permissions = append(permissions, rule)
 		} else {
-			if domain != rule[domIndex] {
-				continue
-			}
 			users, err := rm.GetUsers(sub, domain)
 			if err != nil {
 				return nil, err
