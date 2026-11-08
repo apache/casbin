@@ -706,6 +706,20 @@ func TestGetImplicitUsersForResourceByDomain(t *testing.T) {
 		{"bob", "domain2", "data2", "read"},
 		{"bob", "domain2", "data2", "write"},
 	}, "data2", "domain2")
+
+	_, _ = e.AddPolicy("carol", "domain2", "data1", "read")
+	_, _ = e.AddPolicy("manager", "domain2", "data1", "write")
+	_, _ = e.AddGroupingPolicy("dave", "manager", "domain2")
+
+	testGetImplicitUsersForResourceByDomain(t, e, [][]string{
+		{"alice", "domain1", "data1", "read"},
+		{"alice", "domain1", "data1", "write"},
+	}, "data1", "domain1")
+
+	testGetImplicitUsersForResourceByDomain(t, e, [][]string{
+		{"carol", "domain2", "data1", "read"},
+		{"dave", "domain2", "data1", "write"},
+	}, "data1", "domain2")
 }
 
 func TestConditional(t *testing.T) {
