@@ -164,6 +164,24 @@ func (e *CachedEnforcer) InvalidateCache() error {
 
 func GetCacheKey(params ...interface{}) (string, bool) {
 	key := strings.Builder{}
+	// Most requests contain only strings. Reserve their exact encoded size
+	// without calling CacheableParam.GetCacheKey more than once.
+	size := 0
+	allStrings := true
+	for _, param := range params {
+		part, ok := param.(string)
+		if !ok {
+			allStrings = false
+			break
+		}
+		size += len(part) + 3 // kind, first length digit, and colon
+		for n := len(part); n >= 10; n /= 10 {
+			size++
+		}
+	}
+	if allStrings {
+		key.Grow(size)
+	}
 	for _, param := range params {
 		switch typedParam := param.(type) {
 		case string:
@@ -180,7 +198,8 @@ func GetCacheKey(params ...interface{}) (string, bool) {
 // writeCacheKeyPart length-prefixes each part so that different requests never share a key.
 func writeCacheKeyPart(key *strings.Builder, kind byte, part string) {
 	key.WriteByte(kind)
-	key.WriteString(strconv.Itoa(len(part)))
+	var length [20]byte
+	key.Write(strconv.AppendInt(length[:0], int64(len(part)), 10))
 	key.WriteByte(':')
 	key.WriteString(part)
 }
