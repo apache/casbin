@@ -162,27 +162,48 @@ func (e *CachedEnforcer) InvalidateCache() error {
 	return e.cache.Clear()
 }
 
+type cacheKeyPart struct {
+	kind  byte
+	value string
+}
+
+// GetCacheKey length-prefixes each part so that different requests never share a key.
 func GetCacheKey(params ...interface{}) (string, bool) {
-	key := strings.Builder{}
+	var partsBuf [8]cacheKeyPart
+	parts := partsBuf[:0]
+	size := 0
 	for _, param := range params {
+		var part cacheKeyPart
 		switch typedParam := param.(type) {
 		case string:
-			writeCacheKeyPart(&key, 's', typedParam)
+			part = cacheKeyPart{kind: 's', value: typedParam}
 		case CacheableParam:
-			writeCacheKeyPart(&key, 'c', typedParam.GetCacheKey())
+			part = cacheKeyPart{kind: 'c', value: typedParam.GetCacheKey()}
 		default:
 			return "", false
 		}
+		parts = append(parts, part)
+		size += len(part.value) + decimalLen(len(part.value)) + 2
+	}
+
+	key := strings.Builder{}
+	key.Grow(size)
+	var lengthBuf [20]byte
+	for _, part := range parts {
+		key.WriteByte(part.kind)
+		key.Write(strconv.AppendInt(lengthBuf[:0], int64(len(part.value)), 10))
+		key.WriteByte(':')
+		key.WriteString(part.value)
 	}
 	return key.String(), true
 }
 
-// writeCacheKeyPart length-prefixes each part so that different requests never share a key.
-func writeCacheKeyPart(key *strings.Builder, kind byte, part string) {
-	key.WriteByte(kind)
-	key.WriteString(strconv.Itoa(len(part)))
-	key.WriteByte(':')
-	key.WriteString(part)
+func decimalLen(n int) int {
+	length := 1
+	for ; n >= 10; n /= 10 {
+		length++
+	}
+	return length
 }
 
 // ClearPolicy clears all policy.

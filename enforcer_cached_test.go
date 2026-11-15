@@ -17,7 +17,54 @@
 
 package casbin
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
+
+type countingCacheableParam struct {
+	key   string
+	calls int
+}
+
+func (p *countingCacheableParam) GetCacheKey() string {
+	p.calls++
+	return p.key
+}
+
+func TestGetCacheKey(t *testing.T) {
+	long := strings.Repeat("x", 100)
+	for _, tc := range []struct {
+		name   string
+		params []interface{}
+		key    string
+		ok     bool
+	}{
+		{"empty", nil, "", true},
+		{"strings", []interface{}{"alice", "data1", "read"}, "s5:alices5:data1s4:read", true},
+		{"utf8 and delimiters", []interface{}{"", "é", "a:b", "a\x00b"}, "s0:s2:és3:a:bs3:a\x00b", true},
+		{"three digit length", []interface{}{long}, "s100:" + long, true},
+		{"enforce context", []interface{}{EnforceContext{RType: "r2", PType: "p", EType: "e", MType: "m2"}, "alice"}, "c25:EnforceContext{r2-p-e-m2}s5:alice", true},
+		{"many params", []interface{}{"a", "b", "c", "d", "e", "f", "g", "h", "i"}, "s1:as1:bs1:cs1:ds1:es1:fs1:gs1:hs1:i", true},
+		{"unsupported", []interface{}{"alice", 42}, "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			key, ok := GetCacheKey(tc.params...)
+			if key != tc.key || ok != tc.ok {
+				t.Errorf("GetCacheKey() = %q, %t, supposed to be %q, %t", key, ok, tc.key, tc.ok)
+			}
+		})
+	}
+
+	param := &countingCacheableParam{key: "data1"}
+	key, ok := GetCacheKey("alice", param, "read")
+	if !ok || key != "s5:alicec5:data1s4:read" || param.calls != 1 {
+		t.Errorf("GetCacheKey() = %q, %t with %d GetCacheKey calls", key, ok, param.calls)
+	}
+	if stringKey, _ := GetCacheKey("alice", "data1", "read"); stringKey == key {
+		t.Errorf("string and CacheableParam parts share the key %q", key)
+	}
+}
 
 func testEnforceCache(t *testing.T, e *CachedEnforcer, sub string, obj interface{}, act string, res bool) {
 	t.Helper()

@@ -19,6 +19,7 @@ package casbin
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -221,4 +222,23 @@ func BenchmarkCachedRBACModelMediumParallel(b *testing.B) {
 			_, _ = e.Enforce("user5001", "data150", "read")
 		}
 	})
+}
+
+func BenchmarkGetCacheKey(b *testing.B) {
+	for _, tc := range []struct {
+		name   string
+		params []interface{}
+	}{
+		{"basic", []interface{}{"alice", "/v1/users/42", "GET"}},
+		{"domain", []interface{}{"alice", "tenant-123", "/v1/users/42", "GET"}},
+		{"long", []interface{}{"alice", strings.Repeat("x", 160), "GET"}},
+		{"enforce_context", []interface{}{EnforceContext{RType: "r2", PType: "p", EType: "e", MType: "m2"}, "alice", "data1"}},
+	} {
+		b.Run(tc.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_, _ = GetCacheKey(tc.params...)
+			}
+		})
+	}
 }
