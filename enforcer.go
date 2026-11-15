@@ -804,21 +804,6 @@ func (e *Enforcer) enforce(matcher string, explains *[]string, rvals ...interfac
 		return true, nil
 	}
 
-	functions := e.fm.GetFunctions()
-	if _, ok := e.model["g"]; ok {
-		for key, ast := range e.model["g"] {
-			// g must be a normal role definition (ast.RM != nil)
-			//   or a conditional role definition (ast.CondRM != nil)
-			// ast.RM and ast.CondRM shouldn't be nil at the same time
-			if ast.RM != nil {
-				functions[key] = util.GenerateGFunction(ast.RM, e.gFunctionCache)
-			}
-			if ast.CondRM != nil {
-				functions[key] = util.GenerateConditionalGFunction(ast.CondRM)
-			}
-		}
-	}
-
 	var (
 		rType = "r"
 		pType = "p"
@@ -883,11 +868,8 @@ func (e *Enforcer) enforce(matcher string, explains *[]string, rvals ...interfac
 	}
 
 	hasEval := util.HasEval(expString)
-	if hasEval {
-		functions["eval"] = generateEvalFunction(functions, &parameters)
-	}
 	var expression *govaluate.EvaluableExpression
-	expression, err = e.getAndStoreMatcherExpression(hasEval, expString, functions)
+	expression, err = e.getAndStoreMatcherExpression(hasEval, expString, &parameters)
 	if err != nil {
 		return false, err
 	}
@@ -1032,20 +1014,40 @@ func (e *Enforcer) enforce(matcher string, explains *[]string, rvals ...interfac
 	return result, nil
 }
 
-func (e *Enforcer) getAndStoreMatcherExpression(hasEval bool, expString string, functions map[string]govaluate.ExpressionFunction) (*govaluate.EvaluableExpression, error) {
-	var expression *govaluate.EvaluableExpression
-	var err error
-	cachedExpression, isPresent := e.matcherMap.Load(expString)
-
-	if !hasEval && isPresent {
-		expression = cachedExpression.(*govaluate.EvaluableExpression)
-	} else {
-		expression, err = govaluate.NewEvaluableExpressionWithFunctions(expString, functions)
-		if err != nil {
-			return nil, err
+func (e *Enforcer) getMatcherFunctions() map[string]govaluate.ExpressionFunction {
+	functions := e.fm.GetFunctions()
+	if _, ok := e.model["g"]; ok {
+		for key, ast := range e.model["g"] {
+			// g must be a normal role definition (ast.RM != nil)
+			//   or a conditional role definition (ast.CondRM != nil)
+			// ast.RM and ast.CondRM shouldn't be nil at the same time
+			if ast.RM != nil {
+				functions[key] = util.GenerateGFunction(ast.RM, e.gFunctionCache)
+			}
+			if ast.CondRM != nil {
+				functions[key] = util.GenerateConditionalGFunction(ast.CondRM)
+			}
 		}
-		e.matcherMap.Store(expString, expression)
 	}
+	return functions
+}
+
+func (e *Enforcer) getAndStoreMatcherExpression(hasEval bool, expString string, parameters *enforceParameters) (*govaluate.EvaluableExpression, error) {
+	if !hasEval {
+		if cachedExpression, ok := e.matcherMap.Load(expString); ok {
+			return cachedExpression.(*govaluate.EvaluableExpression), nil
+		}
+	}
+
+	functions := e.getMatcherFunctions()
+	if hasEval {
+		functions["eval"] = generateEvalFunction(functions, parameters)
+	}
+	expression, err := govaluate.NewEvaluableExpressionWithFunctions(expString, functions)
+	if err != nil {
+		return nil, err
+	}
+	e.matcherMap.Store(expString, expression)
 	return expression, nil
 }
 
