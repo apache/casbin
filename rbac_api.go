@@ -604,54 +604,57 @@ func (e *Enforcer) GetNamedImplicitUsersForResource(ptype string, resource strin
 // GetImplicitUsersForResourceByDomain return implicit user based on resource and domain.
 // Compared to GetImplicitUsersForResource, domain is supported.
 func (e *Enforcer) GetImplicitUsersForResourceByDomain(resource string, domain string) ([][]string, error) {
-	permissions := make([][]string, 0)
-	subjectIndex, _ := e.GetFieldIndex("p", "sub")
-	objectIndex, _ := e.GetFieldIndex("p", "obj")
-	domIndex, _ := e.GetFieldIndex("p", "dom")
+	subjectIndex, err := e.GetFieldIndex("p", "sub")
+	if err != nil {
+		return nil, err
+	}
+	objectIndex, err := e.GetFieldIndex("p", "obj")
+	if err != nil {
+		return nil, err
+	}
+	domIndex, err := e.GetFieldIndex("p", "dom")
+	if err != nil {
+		return nil, err
+	}
 	rm := e.GetRoleManager()
 	if rm == nil {
 		return nil, fmt.Errorf("role manager is not initialized")
 	}
 
-	isRole := make(map[string]bool)
-
-	if roles, err := e.GetAllRolesByDomain(domain); err != nil {
-		return nil, err
-	} else {
-		for _, role := range roles {
-			isRole[role] = true
-		}
-	}
-
+	permissions := make([][]string, 0)
 	for _, rule := range e.model["p"]["p"].Policy {
-		obj := rule[objectIndex]
-		if obj != resource {
+		if rule[objectIndex] != resource || !rm.Match(domain, rule[domIndex]) {
 			continue
 		}
 
 		sub := rule[subjectIndex]
+		users, err := rm.GetImplicitUsers(sub, domain)
+		if err != nil {
+			return nil, err
+		}
+		if len(users) == 0 {
+			directUserRule := deepCopyPolicy(rule)
+			directUserRule[domIndex] = domain
+			permissions = append(permissions, directUserRule)
+			continue
+		}
 
-		if !isRole[sub] {
-			permissions = append(permissions, rule)
-		} else {
-			if domain != rule[domIndex] {
-				continue
-			}
-			users, err := rm.GetUsers(sub, domain)
+		for _, user := range users {
+			members, err := rm.GetUsers(user, domain)
 			if err != nil {
 				return nil, err
 			}
-
-			for _, user := range users {
-				implicitUserRule := deepCopyPolicy(rule)
-				implicitUserRule[subjectIndex] = user
-				permissions = append(permissions, implicitUserRule)
+			if len(members) > 0 {
+				continue
 			}
+			implicitUserRule := deepCopyPolicy(rule)
+			implicitUserRule[subjectIndex] = user
+			implicitUserRule[domIndex] = domain
+			permissions = append(permissions, implicitUserRule)
 		}
 	}
 
-	res := removeDuplicatePermissions(permissions)
-	return res, nil
+	return removeDuplicatePermissions(permissions), nil
 }
 
 // GetImplicitObjectPatternsForUser returns all object patterns (with wildcards) that a user has for a given domain and action.

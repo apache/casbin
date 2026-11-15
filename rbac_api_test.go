@@ -706,6 +706,42 @@ func TestGetImplicitUsersForResourceByDomain(t *testing.T) {
 		{"bob", "domain2", "data2", "read"},
 		{"bob", "domain2", "data2", "write"},
 	}, "data2", "domain2")
+
+	_, _ = e.AddPolicy("carol", "domain2", "data1", "read")
+	_, _ = e.AddPolicy("manager", "domain2", "data1", "write")
+	_, _ = e.AddGroupingPolicy("dave", "manager", "domain2")
+	testGetImplicitUsersForResourceByDomain(t, e, [][]string{
+		{"alice", "domain1", "data1", "read"},
+		{"alice", "domain1", "data1", "write"},
+	}, "data1", "domain1")
+	testGetImplicitUsersForResourceByDomain(t, e, [][]string{
+		{"carol", "domain2", "data1", "read"},
+		{"dave", "domain2", "data1", "write"},
+	}, "data1", "domain2")
+
+	_, _ = e.AddGroupingPolicy("leader", "manager", "domain2")
+	_, _ = e.AddGroupingPolicy("erin", "leader", "domain2")
+	testGetImplicitUsersForResourceByDomain(t, e, [][]string{
+		{"carol", "domain2", "data1", "read"},
+		{"dave", "domain2", "data1", "write"},
+		{"erin", "domain2", "data1", "write"},
+	}, "data1", "domain2")
+
+	e, _ = NewEnforcer("examples/rbac_with_domain_pattern_model.conf", "examples/rbac_with_domain_pattern_policy.csv")
+	e.AddNamedDomainMatchingFunc("g", "KeyMatch", util.KeyMatch)
+	testGetImplicitUsersForResourceByDomain(t, e, [][]string{
+		{"alice", "domain1", "data1", "read"},
+		{"alice", "domain1", "data1", "write"},
+	}, "data1", "domain1")
+	testGetImplicitUsersForResourceByDomain(t, e, [][]string{
+		{"alice", "domain2", "data3", "read"},
+		{"bob", "domain2", "data3", "read"},
+	}, "data3", "domain2")
+
+	e, _ = NewEnforcer("examples/rbac_model.conf", "examples/rbac_policy.csv")
+	if _, err := e.GetImplicitUsersForResourceByDomain("data1", "domain1"); err == nil {
+		t.Error("GetImplicitUsersForResourceByDomain should return an error for a model without domains")
+	}
 }
 
 func TestConditional(t *testing.T) {
