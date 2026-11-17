@@ -1341,7 +1341,14 @@ func (cdm *ConditionalDomainManager) AddLinkConditionFunc(userName, roleName str
 
 // AddDomainLinkConditionFunc is based on userName, roleName, domain, add LinkConditionFunc.
 func (cdm *ConditionalDomainManager) AddDomainLinkConditionFunc(userName, roleName, domain string, fn rbac.LinkConditionFunc) {
-	cdm.getConditionalRoleManager(domain, true) // create role manager if it does not exist
+	rm := cdm.getConditionalRoleManager(domain, true) // create role manager if it does not exist
+	if cdm.domainMatchingFunc == nil {
+		// Without domain patterns, a link in domain is only checked by domain's
+		// own role manager. Writing it into every other domain's role manager
+		// creates both roles there and costs O(domains) per link.
+		rm.AddDomainLinkConditionFunc(userName, roleName, domain, fn)
+		return
+	}
 	cdm.rmMap.Range(func(key, value interface{}) bool {
 		value.(*ConditionalRoleManager).AddDomainLinkConditionFunc(userName, roleName, domain, fn)
 		return true
@@ -1358,6 +1365,11 @@ func (cdm *ConditionalDomainManager) SetLinkConditionFuncParams(userName, roleNa
 
 // SetDomainLinkConditionFuncParams sets parameters of LinkConditionFunc based on userName, roleName, domain.
 func (cdm *ConditionalDomainManager) SetDomainLinkConditionFuncParams(userName, roleName, domain string, params ...string) {
+	if cdm.domainMatchingFunc == nil {
+		// See AddDomainLinkConditionFunc: only domain's role manager reads them.
+		cdm.getConditionalRoleManager(domain, true).SetDomainLinkConditionFuncParams(userName, roleName, domain, params...)
+		return
+	}
 	cdm.rmMap.Range(func(key, value interface{}) bool {
 		value.(*ConditionalRoleManager).SetDomainLinkConditionFuncParams(userName, roleName, domain, params...)
 		return true
