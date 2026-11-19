@@ -513,6 +513,83 @@ func TestConditionalDomainPatternLinkCondition(t *testing.T) {
 	}
 }
 
+func TestConditionalDomainLinkConditionScope(t *testing.T) {
+	param := func(args ...string) (bool, error) { return len(args) == 1 && args[0] == "yes", nil }
+	deny := func(args ...string) (bool, error) { return false, nil }
+
+	rm := NewConditionalDomainManager(10)
+	_ = rm.AddLink("alice", "admin", "domain1")
+	rm.AddDomainLinkConditionFunc("alice", "admin", "domain1", param)
+	rm.SetDomainLinkConditionFuncParams("alice", "admin", "domain1", "yes")
+	_ = rm.AddLink("bob", "admin", "domain2")
+	if ok, _ := rm.HasLink("alice", "admin", "domain1"); !ok {
+		t.Errorf("alice should have role admin in domain1")
+	}
+	if ok, _ := rm.HasLink("alice", "admin", "domain2"); ok {
+		t.Errorf("alice should not have role admin in domain2")
+	}
+	if rm2, ok := rm.load("domain2"); !ok {
+		t.Errorf("domain2 should have a role manager")
+	} else if _, ok = rm2.load("alice"); ok {
+		t.Errorf("the role manager of domain2 should not hold alice")
+	}
+	rm.SetDomainLinkConditionFuncParams("alice", "admin", "domain1", "no")
+	if ok, _ := rm.HasLink("alice", "admin", "domain1"); ok {
+		t.Errorf("alice should not have role admin in domain1 once the condition fails")
+	}
+
+	rm.SetDomainLinkConditionFuncParams("carol", "admin", "domain3", "yes")
+	rm.AddDomainLinkConditionFunc("carol", "admin", "domain3", param)
+	_ = rm.AddLink("carol", "admin", "domain3")
+	if ok, _ := rm.HasLink("carol", "admin", "domain3"); !ok {
+		t.Errorf("carol should have role admin in domain3")
+	}
+
+	rm = NewConditionalDomainManager(10)
+	_ = rm.AddLink("bob", "admin", "domain1")
+	_ = rm.AddLink("alice", "admin", "domain*")
+	rm.AddDomainLinkConditionFunc("alice", "admin", "domain*", deny)
+	rm.AddDomainMatchingFunc("keyMatch", util.KeyMatch)
+	for _, domain := range []string{"domain*", "domain1"} {
+		if ok, _ := rm.HasLink("alice", "admin", domain); ok {
+			t.Errorf("alice should not have role admin in %s after adding the domain matching function", domain)
+		}
+	}
+	if ok, _ := rm.HasLink("bob", "admin", "domain1"); !ok {
+		t.Errorf("bob should have role admin in domain1")
+	}
+
+	rm = NewConditionalDomainManager(10)
+	rm.AddDomainMatchingFunc("keyMatch", util.KeyMatch)
+	rm.AddDomainLinkConditionFunc("alice", "admin", "domain*", deny)
+	_ = rm.AddLink("bob", "admin", "domain1")
+	_ = rm.AddLink("alice", "admin", "domain*")
+	for _, domain := range []string{"domain*", "domain1"} {
+		if ok, _ := rm.HasLink("alice", "admin", domain); ok {
+			t.Errorf("alice should not have role admin in %s when the condition is added before the link", domain)
+		}
+	}
+	_ = rm.AddLink("dave", "admin", "domain2")
+	rm.AddDomainLinkConditionFunc("dave", "admin", "domain2", deny)
+	if rm1, ok := rm.load("domain1"); !ok {
+		t.Errorf("domain1 should have a role manager")
+	} else if _, ok = rm1.load("dave"); ok {
+		t.Errorf("the role manager of domain1 should not hold dave")
+	}
+}
+
+func BenchmarkConditionalDomainManagerManyDomains(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		rm := NewConditionalDomainManager(10)
+		for d := 0; d < 1000; d++ {
+			domain := fmt.Sprintf("domain%d", d)
+			user := fmt.Sprintf("user%d", d)
+			_ = rm.AddLink(user, "admin", domain)
+			rm.SetDomainLinkConditionFuncParams(user, "admin", domain, "_", "_")
+		}
+	}
+}
+
 func TestConditionalDomainPatternDeleteLink(t *testing.T) {
 	rm := NewConditionalDomainManager(10)
 	rm.AddDomainMatchingFunc("keyMatch", util.KeyMatch)

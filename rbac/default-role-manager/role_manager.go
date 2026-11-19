@@ -1222,6 +1222,15 @@ func (cdm *ConditionalDomainManager) rangeAffectedConditionalRoleManagers(domain
 	}
 }
 
+// rangeLinkConditionalRoleManagers calls fn on the role managers that check the links of domain:
+// the role manager of domain and those of the domains matched by domain as a pattern.
+func (cdm *ConditionalDomainManager) rangeLinkConditionalRoleManagers(domain string, fn func(rm *ConditionalRoleManager)) {
+	fn(cdm.getConditionalRoleManager(domain, true))
+	cdm.rangeAffectedConditionalRoleManagers(domain, func(_ string, rm *ConditionalRoleManager) {
+		fn(rm)
+	})
+}
+
 // load or create a ConditionalRoleManager instance of domain.
 func (cdm *ConditionalDomainManager) getConditionalRoleManager(domain string, store bool) *ConditionalRoleManager {
 	var rm *ConditionalRoleManager
@@ -1304,8 +1313,13 @@ func (cdm *ConditionalDomainManager) AddLink(name1 string, name2 string, domains
 	conditionalRoleManager := cdm.getConditionalRoleManager(domain, true) // create role manager if it does not exist
 	_ = conditionalRoleManager.AddLink(name1, name2, domain)
 
+	src, srcOk := conditionalRoleManager.load(name1)
 	cdm.rangeAffectedConditionalRoleManagers(domain, func(_ string, rm *ConditionalRoleManager) {
 		_ = rm.AddLink(name1, name2, domain)
+		if srcOk {
+			dst, _ := rm.getRole(name1)
+			dst.copyLinkConditions(src, name2)
+		}
 	})
 	return nil
 }
@@ -1341,10 +1355,8 @@ func (cdm *ConditionalDomainManager) AddLinkConditionFunc(userName, roleName str
 
 // AddDomainLinkConditionFunc is based on userName, roleName, domain, add LinkConditionFunc.
 func (cdm *ConditionalDomainManager) AddDomainLinkConditionFunc(userName, roleName, domain string, fn rbac.LinkConditionFunc) {
-	cdm.getConditionalRoleManager(domain, true) // create role manager if it does not exist
-	cdm.rmMap.Range(func(key, value interface{}) bool {
-		value.(*ConditionalRoleManager).AddDomainLinkConditionFunc(userName, roleName, domain, fn)
-		return true
+	cdm.rangeLinkConditionalRoleManagers(domain, func(rm *ConditionalRoleManager) {
+		rm.AddDomainLinkConditionFunc(userName, roleName, domain, fn)
 	})
 }
 
@@ -1358,9 +1370,8 @@ func (cdm *ConditionalDomainManager) SetLinkConditionFuncParams(userName, roleNa
 
 // SetDomainLinkConditionFuncParams sets parameters of LinkConditionFunc based on userName, roleName, domain.
 func (cdm *ConditionalDomainManager) SetDomainLinkConditionFuncParams(userName, roleName, domain string, params ...string) {
-	cdm.rmMap.Range(func(key, value interface{}) bool {
-		value.(*ConditionalRoleManager).SetDomainLinkConditionFuncParams(userName, roleName, domain, params...)
-		return true
+	cdm.rangeLinkConditionalRoleManagers(domain, func(rm *ConditionalRoleManager) {
+		rm.SetDomainLinkConditionFuncParams(userName, roleName, domain, params...)
 	})
 }
 
@@ -1385,11 +1396,16 @@ func (cdm *ConditionalDomainManager) rebuild() {
 		}
 	}
 	rmMap.Range(func(key, value interface{}) bool {
-		rm := cdm.getConditionalRoleManager(key.(string), true)
-		value.(*ConditionalRoleManager).allRoles.Range(func(name, src interface{}) bool {
-			dst, _ := rm.getRole(name.(string))
-			dst.copyLinkConditions(src.(*Role), "")
-			return true
+		cdm.getConditionalRoleManager(key.(string), true)
+		return true
+	})
+	rmMap.Range(func(key, value interface{}) bool {
+		cdm.rangeLinkConditionalRoleManagers(key.(string), func(rm *ConditionalRoleManager) {
+			value.(*ConditionalRoleManager).allRoles.Range(func(name, src interface{}) bool {
+				dst, _ := rm.getRole(name.(string))
+				dst.copyLinkConditions(src.(*Role), "")
+				return true
+			})
 		})
 		return true
 	})
