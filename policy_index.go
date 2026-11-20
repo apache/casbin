@@ -54,6 +54,12 @@ type PolicyIndex struct {
 // existing index for the same policy type. The index is rebuilt automatically
 // when the policy changes.
 func (e *Enforcer) SetPolicyIndex(ptype string, index PolicyIndex) error {
+	return e.setPolicyIndex(ptype, "", index)
+}
+
+// setPolicyIndex limits the index to requests of rType; an empty rType means
+// every request type.
+func (e *Enforcer) setPolicyIndex(ptype string, rType string, index PolicyIndex) error {
 	if index.RequestKey == nil || index.PolicyKey == nil {
 		return errors.New("policy index functions cannot be nil")
 	}
@@ -62,6 +68,7 @@ func (e *Enforcer) SetPolicyIndex(ptype string, index PolicyIndex) error {
 	}
 
 	e.policyIndexes.Store(ptype, &policyIndex{
+		rType:      rType,
 		requestKey: index.RequestKey,
 		policyKey:  index.PolicyKey,
 	})
@@ -70,7 +77,8 @@ func (e *Enforcer) SetPolicyIndex(ptype string, index PolicyIndex) error {
 
 // SetPolicyIndexByToken installs a policy partition that uses the string value
 // of requestToken as the request key and the string value of policyToken as
-// the rule key. It uses the default request type "r"; use SetPolicyIndex with
+// the rule key. It applies only to requests of the default request type "r";
+// requests of other types evaluate every rule. Use SetPolicyIndex with
 // a custom function when enforcing through an EnforceContext.
 func (e *Enforcer) SetPolicyIndexByToken(ptype string, requestToken string, policyToken string) error {
 	rAssertion, ok := e.model["r"]["r"]
@@ -103,7 +111,7 @@ func (e *Enforcer) SetPolicyIndexByToken(ptype string, requestToken string, poli
 		return fmt.Errorf("policy token %q does not exist", policyToken)
 	}
 
-	return e.SetPolicyIndex(ptype, PolicyIndex{
+	return e.setPolicyIndex(ptype, "r", PolicyIndex{
 		RequestKey: func(rvals []interface{}) (string, bool) {
 			if requestIndex >= len(rvals) {
 				return "", false
@@ -125,14 +133,19 @@ func (e *Enforcer) RemovePolicyIndex(ptype string) {
 	e.policyIndexes.Delete(ptype)
 }
 
-func (e *Enforcer) getPolicyIndex(ptype string) *policyIndex {
+func (e *Enforcer) getPolicyIndex(ptype string, rType string) *policyIndex {
 	if value, ok := e.policyIndexes.Load(ptype); ok {
-		return value.(*policyIndex)
+		idx := value.(*policyIndex)
+		if idx.rType != "" && idx.rType != rType {
+			return nil
+		}
+		return idx
 	}
 	return nil
 }
 
 type policyIndex struct {
+	rType      string
 	requestKey func(rvals []interface{}) (string, bool)
 	policyKey  func(rule []string) string
 

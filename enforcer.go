@@ -889,7 +889,7 @@ func (e *Enforcer) enforce(matcher string, explains *[]string, rvals ...interfac
 	var bucketIDs []uint32
 	var requestBucket uint32
 	var usePolicyIndex bool
-	if pIndex := e.getPolicyIndex(pType); pIndex != nil {
+	if pIndex := e.getPolicyIndex(pType, rType); pIndex != nil {
 		bucketIDs = pIndex.ensureBuilt(e.model["p"][pType])
 		requestBucket, usePolicyIndex = pIndex.requestBucket(rvals)
 	}

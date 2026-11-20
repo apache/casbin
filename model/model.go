@@ -232,8 +232,26 @@ func (model Model) PrintModel() {
 	// Logger has been removed - this is now a no-op
 }
 
+// effectForPolicyType returns the effect of the e section that pairs with ptype
+// by suffix (p2 -> e2), falling back to the default e section.
+func (model Model) effectForPolicyType(ptype string) string {
+	if ast, ok := model["e"]["e"+strings.TrimPrefix(ptype, "p")]; ok {
+		return ast.Value
+	}
+	if ast, ok := model["e"]["e"]; ok {
+		return ast.Value
+	}
+	return ""
+}
+
 func (model Model) SortPoliciesBySubjectHierarchy() error {
-	if model["e"]["e"].Value != constant.SubjectPriorityEffect {
+	var ptypes []string
+	for ptype := range model["p"] {
+		if model.effectForPolicyType(ptype) == constant.SubjectPriorityEffect {
+			ptypes = append(ptypes, ptype)
+		}
+	}
+	if len(ptypes) == 0 {
 		return nil
 	}
 	g, err := model.GetAssertion("g", "g")
@@ -241,7 +259,8 @@ func (model Model) SortPoliciesBySubjectHierarchy() error {
 		return err
 	}
 	subIndex := 0
-	for ptype, assertion := range model["p"] {
+	for _, ptype := range ptypes {
+		assertion := model["p"][ptype]
 		domainIndex, err := model.GetFieldIndex(ptype, constant.DomainIndex)
 		if err != nil {
 			domainIndex = -1
