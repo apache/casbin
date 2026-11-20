@@ -46,7 +46,7 @@ func NewSyncedCachedEnforcer(params ...interface{}) (*SyncedCachedEnforcer, erro
 	}
 
 	e.enableCache = 1
-	e.cache, _ = cache.NewSyncCache()
+	e.cache, _ = cache.NewConcurrentCache(cache.DefaultConcurrentCacheSize)
 	e.locker = new(sync.RWMutex)
 	e.cacheVersion = e.getPolicyVersion()
 	return e, nil

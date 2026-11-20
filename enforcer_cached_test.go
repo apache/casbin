@@ -19,7 +19,10 @@ package casbin
 
 import (
 	"strings"
+	"sync"
 	"testing"
+
+	"github.com/casbin/casbin/v3/persist/cache"
 )
 
 type countingCacheableParam struct {
@@ -120,4 +123,48 @@ func TestCache(t *testing.T) {
 	testEnforceCache(t, e, "bob", "data2", "write", false)
 	testEnforceCache(t, e, "alice", "data2", "read", false)
 	testEnforceCache(t, e, "alice", "data2", "write", false)
+}
+
+func TestCacheConcurrentEnforce(t *testing.T) {
+	defaultCache, _ := cache.NewDefaultCache()
+	for _, tc := range []struct {
+		name  string
+		cache cache.Cache
+	}{
+		{"concurrent cache", nil},
+		{"cache not safe for concurrent use", defaultCache},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e, _ := NewCachedEnforcer("examples/rbac_model.conf", "examples/rbac_policy.csv")
+			if tc.cache != nil {
+				e.SetCache(tc.cache)
+			}
+
+			enforceConcurrently := func(want bool) {
+				t.Helper()
+				var wg sync.WaitGroup
+				for i := 0; i < 16; i++ {
+					wg.Add(1)
+					go func() {
+						defer wg.Done()
+						for j := 0; j < 200; j++ {
+							if res, _ := e.Enforce("alice", "data1", "read"); res != want {
+								t.Errorf("alice, data1, read: %t, supposed to be %t", res, want)
+								return
+							}
+							if res, _ := e.Enforce("alice", "data2", "write"); !res {
+								t.Error("alice, data2, write: false, supposed to be true")
+								return
+							}
+						}
+					}()
+				}
+				wg.Wait()
+			}
+
+			enforceConcurrently(true)
+			_, _ = e.RemovePolicy("alice", "data1", "read")
+			enforceConcurrently(false)
+		})
+	}
 }

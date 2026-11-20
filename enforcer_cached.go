@@ -29,12 +29,15 @@ import (
 
 // CachedEnforcer wraps Enforcer and provides decision cache.
 type CachedEnforcer struct {
-	*Enforcer
+	// cacheVersion is accessed atomically, so it stays first to be 64-bit aligned on 32-bit platforms.
 	cacheVersion uint64
-	expireTime   time.Duration
-	cache        cache.Cache
-	enableCache  int32
-	locker       *sync.RWMutex
+	*Enforcer
+	expireTime  time.Duration
+	cache       cache.Cache
+	enableCache int32
+	locker      *sync.RWMutex
+	// concurrentCache reports whether cache is safe for concurrent use, so reading it needs no lock.
+	concurrentCache bool
 }
 
 type CacheableParam interface {
@@ -51,7 +54,8 @@ func NewCachedEnforcer(params ...interface{}) (*CachedEnforcer, error) {
 	}
 
 	e.enableCache = 1
-	e.cache, _ = cache.NewDefaultCache()
+	e.cache, _ = cache.NewConcurrentCache(cache.DefaultConcurrentCacheSize)
+	e.concurrentCache = true
 	e.locker = new(sync.RWMutex)
 	e.cacheVersion = e.getPolicyVersion()
 	return e, nil
@@ -138,6 +142,9 @@ func (e *CachedEnforcer) RemovePolicies(rules [][]string) (bool, error) {
 }
 
 func (e *CachedEnforcer) getCachedResult(key string) (res bool, err error) {
+	if e.concurrentCache {
+		return e.cache.Get(key)
+	}
 	e.locker.Lock()
 	defer e.locker.Unlock()
 	return e.cache.Get(key)
@@ -147,8 +154,19 @@ func (e *CachedEnforcer) SetExpireTime(expireTime time.Duration) {
 	e.expireTime = expireTime
 }
 
+// SetCache replaces the decision cache. A cache that is not safe for concurrent use is only accessed under a lock.
 func (e *CachedEnforcer) SetCache(c cache.Cache) {
 	e.cache = c
+	e.concurrentCache = isConcurrentCache(c)
+}
+
+func isConcurrentCache(c cache.Cache) bool {
+	switch c.(type) {
+	case *cache.ConcurrentCache, *cache.SyncCache:
+		return true
+	default:
+		return false
+	}
 }
 
 func (e *CachedEnforcer) getKey(params ...interface{}) (string, bool) {
@@ -219,6 +237,10 @@ func (e *CachedEnforcer) ClearPolicy() {
 
 // syncCacheVersion drops all cached decisions when the policy has changed since they were cached.
 func (e *CachedEnforcer) syncCacheVersion(version uint64) error {
+	if version <= atomic.LoadUint64(&e.cacheVersion) {
+		return nil
+	}
+
 	e.locker.Lock()
 	defer e.locker.Unlock()
 	if version <= e.cacheVersion {
@@ -227,13 +249,18 @@ func (e *CachedEnforcer) syncCacheVersion(version uint64) error {
 	if err := e.cache.Clear(); err != nil {
 		return err
 	}
-	e.cacheVersion = version
+	atomic.StoreUint64(&e.cacheVersion, version)
 	return nil
 }
 
 func (e *CachedEnforcer) setCachedResult(version uint64, key string, res bool, extra ...interface{}) error {
-	e.locker.Lock()
-	defer e.locker.Unlock()
+	if e.concurrentCache {
+		e.locker.RLock()
+		defer e.locker.RUnlock()
+	} else {
+		e.locker.Lock()
+		defer e.locker.Unlock()
+	}
 	if version != e.cacheVersion {
 		return nil
 	}
