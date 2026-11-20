@@ -1,3 +1,5 @@
+# The original Go ignore rules are from github/gitignore (MIT); see LICENSE.
+
 # Compiled Object files, Static and Dynamic libs (Shared Objects)
 *.o
 *.a
