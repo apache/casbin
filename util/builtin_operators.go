@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/bmatcuk/doublestar/v4"
@@ -150,9 +151,28 @@ func (p *compiledPattern) match(key1 string) (bool, error) {
 // state a single map read.
 //
 // A policy holds a bounded set of patterns, so the cache converges to that set
-// after the first pass; sync.Map suits that read-mostly shape.
+// after the first pass; sync.Map suits that read-mostly shape, and lookups take no
+// lock. Patterns that leave the policy, or key2 values taken from requests, would
+// still pile up, so each cache holds at most patternCacheSize entries and is
+// emptied when a new pattern arrives while it is full.
 type patternCache struct {
-	m sync.Map // string -> *compiledPattern
+	m    sync.Map // string -> *compiledPattern
+	mu   sync.Mutex
+	size int
+}
+
+// DefaultPatternCacheSize is the default number of compiled patterns each matcher
+// function keeps.
+const DefaultPatternCacheSize = 10000
+
+var patternCacheSize int64 = DefaultPatternCacheSize
+
+// SetPatternCacheSize sets how many compiled patterns each matcher function, such
+// as keyMatch2 or regexMatch, keeps. Zero or less means no limit. It should be at
+// least the number of distinct patterns in the policy, or patterns keep being
+// compiled again.
+func SetPatternCacheSize(maxEntries int) {
+	atomic.StoreInt64(&patternCacheSize, int64(maxEntries))
 }
 
 func (c *patternCache) get(key2 string, build func(key2 string) *compiledPattern) *compiledPattern {
@@ -161,9 +181,33 @@ func (c *patternCache) get(key2 string, build func(key2 string) *compiledPattern
 	}
 
 	p := build(key2)
-	c.m.Store(key2, p)
+	c.add(key2, p)
 
 	return p
+}
+
+func (c *patternCache) add(key2 string, p *compiledPattern) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if _, ok := c.m.Load(key2); ok {
+		return
+	}
+	if limit := atomic.LoadInt64(&patternCacheSize); limit > 0 && int64(c.size) >= limit {
+		c.m.Range(func(key, _ interface{}) bool {
+			c.m.Delete(key)
+			return true
+		})
+		c.size = 0
+	}
+	c.m.Store(key2, p)
+	c.size++
+}
+
+func (c *patternCache) len() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.size
 }
 
 var (
