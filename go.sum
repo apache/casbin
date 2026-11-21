@@ -1,6 +1,6 @@
 github.com/bmatcuk/doublestar/v4 v4.6.1 h1:FH9SifrbvJhnlQpztAx++wlkk70QBf0iBWDwNy7PA4I=
 github.com/bmatcuk/doublestar/v4 v4.6.1/go.mod h1:xBQ8jztBU6kakFMg+8WGxn0c6z1fTSPVIjEY1Wr7jzc=
-github.com/casbin/govaluate v1.10.1-0.20261020141028-6321266c881e h1:TxetijVWQYo1oXdpqgWl6j66UUlfI6w6PhFDZlz3h7w=
-github.com/casbin/govaluate v1.10.1-0.20261020141028-6321266c881e/go.mod h1:G/UnbIjZk/0uMNaLwZZmFQrR72tYRZWQkO70si/iR7A=
+github.com/casbin/govaluate v1.10.1-0.20261119145852-7973ae37dc38 h1:HlXK33Jt5nWainlLXR90v35pgh4hVv0ULvxGhj07Sm8=
+github.com/casbin/govaluate v1.10.1-0.20261119145852-7973ae37dc38/go.mod h1:G/UnbIjZk/0uMNaLwZZmFQrR72tYRZWQkO70si/iR7A=
 github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
 github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
