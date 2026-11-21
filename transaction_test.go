@@ -223,6 +223,64 @@ func TestConcurrentTransactions(t *testing.T) {
 	}
 }
 
+// Two transactions that touch different rules should both survive the commit of
+// the other one. The second committer used to replace the model with its own
+// start snapshot, which silently dropped whatever the first one had committed.
+func TestConcurrentTransactionsKeepEachOthersCommits(t *testing.T) {
+	adapter := NewMockTransactionalAdapter()
+	e, err := NewTransactionalEnforcer("examples/rbac_model.conf", adapter)
+	if err != nil {
+		t.Fatalf("Failed to create transactional enforcer: %v", err)
+	}
+	adapter.Enforcer = e.Enforcer
+
+	if _, err = e.AddPolicy("alice", "data2", "write"); err != nil {
+		t.Fatalf("Failed to seed policy: %v", err)
+	}
+
+	ctx := context.Background()
+
+	tx1, err := e.BeginTransaction(ctx)
+	if err != nil {
+		t.Fatalf("Failed to begin transaction 1: %v", err)
+	}
+	tx2, err := e.BeginTransaction(ctx)
+	if err != nil {
+		t.Fatalf("Failed to begin transaction 2: %v", err)
+	}
+
+	// tx1 revokes a permission, tx2 grants an unrelated one.
+	if ok, err := tx1.RemovePolicy("alice", "data2", "write"); !ok || err != nil {
+		t.Fatalf("Failed to remove policy in transaction 1: %v", err)
+	}
+	if ok, err := tx2.AddPolicy("bob", "data3", "read"); !ok || err != nil {
+		t.Fatalf("Failed to add policy in transaction 2: %v", err)
+	}
+
+	if err = tx1.Commit(); err != nil {
+		t.Fatalf("Failed to commit transaction 1: %v", err)
+	}
+	if err = tx2.Commit(); err != nil {
+		t.Fatalf("Failed to commit transaction 2: %v", err)
+	}
+
+	allowed, err := e.Enforce("alice", "data2", "write")
+	if err != nil {
+		t.Fatalf("Enforce failed: %v", err)
+	}
+	if allowed {
+		t.Error("alice should no longer have data2 write after transaction 1 revoked it")
+	}
+
+	allowed, err = e.Enforce("bob", "data3", "read")
+	if err != nil {
+		t.Fatalf("Enforce failed: %v", err)
+	}
+	if !allowed {
+		t.Error("bob should have data3 read after transaction 2 granted it")
+	}
+}
+
 // Test transaction conflicts.
 func TestTransactionConflicts(t *testing.T) {
 	adapter := NewMockTransactionalAdapter()

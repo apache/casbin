@@ -246,8 +246,11 @@ func (tx *Transaction) applyUpdateOperationToDatabase(adapter persist.Adapter, o
 
 // applyOperationsToModel applies all buffered operations to the in-memory model.
 func (tx *Transaction) applyOperationsToModel() error {
-	// Create new model with all operations applied.
-	newModel, err := tx.buffer.ApplyOperationsToModel(tx.buffer.GetModelSnapshot())
+	// Apply the operations on top of the model the enforcer holds now, not on
+	// top of the snapshot taken when this transaction began. Basing it on the
+	// snapshot discards every policy change that was committed in the meantime,
+	// so a revocation committed by another transaction comes back.
+	newModel, err := tx.buffer.ApplyOperationsToModel(tx.enforcer.model)
 	if err != nil {
 		return err
 	}

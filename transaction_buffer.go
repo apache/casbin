@@ -91,7 +91,7 @@ func (tb *TransactionBuffer) ApplyOperationsToModel(baseModel model.Model) (mode
 		switch op.Type {
 		case persist.OperationAdd:
 			for _, rule := range op.Rules {
-				if err := resultModel.AddPolicy(op.Section, op.PolicyType, rule); err != nil {
+				if err := addRuleIfMissing(resultModel, op.Section, op.PolicyType, rule); err != nil {
 					return nil, err
 				}
 			}
@@ -108,7 +108,7 @@ func (tb *TransactionBuffer) ApplyOperationsToModel(baseModel model.Model) (mode
 					if _, err := resultModel.RemovePolicy(op.Section, op.PolicyType, oldRule); err != nil {
 						return nil, err
 					}
-					if err := resultModel.AddPolicy(op.Section, op.PolicyType, op.Rules[i]); err != nil {
+					if err := addRuleIfMissing(resultModel, op.Section, op.PolicyType, op.Rules[i]); err != nil {
 						return nil, err
 					}
 				}
@@ -117,6 +117,22 @@ func (tb *TransactionBuffer) ApplyOperationsToModel(baseModel model.Model) (mode
 	}
 
 	return resultModel, nil
+}
+
+// addRuleIfMissing adds a rule unless the model already carries it. The base
+// model can already contain a rule another transaction added, and Model.AddPolicy
+// appends without checking, which would leave two copies of it: the second one
+// shadows the first in PolicyMap, so removing the rule once would delete the map
+// entry while the duplicate stayed in Policy and kept matching.
+func addRuleIfMissing(m model.Model, sec string, ptype string, rule []string) error {
+	hasPolicy, err := m.HasPolicy(sec, ptype, rule)
+	if err != nil {
+		return err
+	}
+	if hasPolicy {
+		return nil
+	}
+	return m.AddPolicy(sec, ptype, rule)
 }
 
 // HasOperations returns true if there are any buffered operations.
