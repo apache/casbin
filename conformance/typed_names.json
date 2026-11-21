@@ -1,0 +1,30 @@
+{
+  "valid": [
+    {"type": "user", "parts": ["alice"], "name": "user:alice"},
+    {"type": "user", "parts": ["admins"], "name": "user:admins"},
+    {"type": "group", "parts": ["admins"], "name": "group:admins"},
+    {"type": "team", "parts": ["acme", "dev"], "name": "team:acme/dev"},
+    {"type": "org", "parts": ["acme_t_dev"], "name": "org:acme_t_dev"},
+    {"type": "org", "parts": ["acme/dev"], "name": "org:acme%2Fdev"},
+    {"type": "team", "parts": ["acme/x", "y"], "name": "team:acme%2Fx/y"},
+    {"type": "team", "parts": ["acme", "x/y"], "name": "team:acme/x%2Fy"},
+    {"type": "user", "parts": ["group:admins"], "name": "user:group%3Aadmins"},
+    {"type": "a:b", "parts": ["c"], "name": "a%3Ab:c"},
+    {"type": "user", "parts": ["100%"], "name": "user:100%25"},
+    {"type": "user", "parts": ["%3A"], "name": "user:%253A"},
+    {"type": "user", "parts": [""], "name": "user:"},
+    {"type": "team", "parts": ["", ""], "name": "team:/"},
+    {"type": "", "parts": ["alice"], "name": ":alice"},
+    {"type": "用户", "parts": ["张三"], "name": "用户:张三"}
+  ],
+  "invalid": [
+    "alice",
+    "",
+    "user:a:b",
+    "a/b:c",
+    "user:100%",
+    "user:%2",
+    "user:%3a",
+    "user:%41"
+  ]
+}

@@ -56,6 +56,12 @@ Other implementations read the cases from the directory in the `CASBIN_CONFORMAN
     CASBIN_CONFORMANCE_DIR: ${{ github.workspace }}/casbin-conformance/conformance
 ```
 
+## Typed names
+
+`typed_names.json` checks `TypedName` and `ParseTypedName`. For every entry in `valid`, `TypedName(type, parts...)` must return `name`, and `ParseTypedName(name)` must return `type` and `parts`. Every string in `invalid` must be rejected by `ParseTypedName`.
+
+The encoding escapes `%`, `:` and `/` in the type and in each part as `%25`, `%3A` and `%2F`, then joins the type and the first part with `:` and the parts with `/`. The Go implementation is [`typed_name.go`](../typed_name.go).
+
 ## Regenerating
 
 Add a model and policy pair to `conformanceSources` in `conformance_test.go`, then run:
