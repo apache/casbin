@@ -45,8 +45,8 @@ The following are untrusted:
 
 The following are not treated as vulnerabilities. Some of them may still be fixed as ordinary bugs or hardening.
 
-1. Issues that require the ability to write or modify the model, the policy or the matchers, including expressions, regular expressions, IP ranges and functions placed in them, or that are caused by invalid or unsafe values written there by a policy administrator.
-2. Unexpected results caused by how a matcher expression is written or evaluated, such as operator precedence, the parsing of literals, or the handling of mixed operators, where the matcher itself is controlled by a policy administrator.
+1. Issues that require the ability to write or modify the model, the policy or the matchers, including expressions, regular expressions, IP ranges and functions placed in them, or that are caused by invalid or unsafe values written there by a policy administrator. An application that lets less trusted users write any part of the policy or the model must validate that input itself.
+2. Unexpected results caused by how a matcher expression is written or evaluated, such as operator precedence, the parsing of literals, or the handling of mixed operators, where the matcher itself is controlled by a policy administrator. Where an implementation limits which expressions are accepted in matchers or in `eval()` rules, those limits are for portability, not security boundaries.
 3. Issues that require control of the storage behind an adapter or of the message channel used by a watcher or dispatcher.
 4. Issues that require acting as a trusted client of a Casbin service, such as passing crafted arguments to its management or enforcement APIs.
 5. Issues caused by how the application uses the API, such as disabling enforcement, clearing and rebuilding policy on a live enforcer, or using an enforcer that is not documented as thread-safe from multiple goroutines or threads.
