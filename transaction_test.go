@@ -223,6 +223,103 @@ func TestConcurrentTransactions(t *testing.T) {
 	}
 }
 
+// Test that committing a transaction keeps the changes committed after it began.
+func TestCommitKeepsConcurrentChanges(t *testing.T) {
+	newEnforcer := func(t *testing.T) *TransactionalEnforcer {
+		t.Helper()
+		adapter := NewMockTransactionalAdapter()
+		e, err := NewTransactionalEnforcer("examples/rbac_model.conf", adapter)
+		if err != nil {
+			t.Fatalf("Failed to create transactional enforcer: %v", err)
+		}
+		adapter.Enforcer = e.Enforcer
+		return e
+	}
+	mustOK := func(t *testing.T) func(bool, error) {
+		return func(ok bool, err error) {
+			t.Helper()
+			if !ok || err != nil {
+				t.Fatalf("Unexpected result: %v, %v", ok, err)
+			}
+		}
+	}
+	mustEnforce := func(t *testing.T, e *TransactionalEnforcer, want bool, rvals ...interface{}) {
+		t.Helper()
+		got, err := e.Enforce(rvals...)
+		if err != nil {
+			t.Fatalf("Enforce failed: %v", err)
+		}
+		if got != want {
+			t.Errorf("Enforce(%v) = %v, want %v", rvals, got, want)
+		}
+	}
+	ctx := context.Background()
+
+	t.Run("removal by another transaction", func(t *testing.T) {
+		e := newEnforcer(t)
+		mustOK(t)(e.AddPolicy("alice", "data2", "write"))
+		tx1, err := e.BeginTransaction(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tx2, err := e.BeginTransaction(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		mustOK(t)(tx1.RemovePolicy("alice", "data2", "write"))
+		mustOK(t)(tx2.AddPolicy("bob", "data3", "read"))
+		if err = tx1.Commit(); err != nil {
+			t.Fatal(err)
+		}
+		if err = tx2.Commit(); err != nil {
+			t.Fatal(err)
+		}
+		mustEnforce(t, e, false, "alice", "data2", "write")
+		mustEnforce(t, e, true, "bob", "data3", "read")
+	})
+
+	t.Run("removal outside the transaction", func(t *testing.T) {
+		e := newEnforcer(t)
+		mustOK(t)(e.AddPolicy("alice", "data2", "write"))
+		tx, err := e.BeginTransaction(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		mustOK(t)(e.RemovePolicy("alice", "data2", "write"))
+		mustOK(t)(tx.AddPolicy("bob", "data3", "read"))
+		if err = tx.Commit(); err != nil {
+			t.Fatal(err)
+		}
+		mustEnforce(t, e, false, "alice", "data2", "write")
+		mustEnforce(t, e, true, "bob", "data3", "read")
+	})
+
+	t.Run("same rule added twice", func(t *testing.T) {
+		e := newEnforcer(t)
+		tx1, err := e.BeginTransaction(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tx2, err := e.BeginTransaction(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		mustOK(t)(tx1.AddPolicy("bob", "data3", "read"))
+		mustOK(t)(tx2.AddPolicy("bob", "data3", "read"))
+		if err = tx1.Commit(); err != nil {
+			t.Fatal(err)
+		}
+		if err = tx2.Commit(); err != nil {
+			t.Fatal(err)
+		}
+		if n := len(e.GetModel()["p"]["p"].Policy); n != 1 {
+			t.Fatalf("Policy count = %d, want 1", n)
+		}
+		mustOK(t)(e.RemovePolicy("bob", "data3", "read"))
+		mustEnforce(t, e, false, "bob", "data3", "read")
+	})
+}
+
 // Test transaction conflicts.
 func TestTransactionConflicts(t *testing.T) {
 	adapter := NewMockTransactionalAdapter()

@@ -246,8 +246,9 @@ func (tx *Transaction) applyUpdateOperationToDatabase(adapter persist.Adapter, o
 
 // applyOperationsToModel applies all buffered operations to the in-memory model.
 func (tx *Transaction) applyOperationsToModel() error {
-	// Create new model with all operations applied.
-	newModel, err := tx.buffer.ApplyOperationsToModel(tx.buffer.GetModelSnapshot())
+	// Build on the current model so that changes committed after this
+	// transaction began are kept.
+	newModel, err := tx.buffer.ApplyOperationsToModel(tx.enforcer.model)
 	if err != nil {
 		return err
 	}

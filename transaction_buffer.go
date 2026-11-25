@@ -91,7 +91,7 @@ func (tb *TransactionBuffer) ApplyOperationsToModel(baseModel model.Model) (mode
 		switch op.Type {
 		case persist.OperationAdd:
 			for _, rule := range op.Rules {
-				if err := resultModel.AddPolicy(op.Section, op.PolicyType, rule); err != nil {
+				if err := addPolicyIfAbsent(resultModel, op.Section, op.PolicyType, rule); err != nil {
 					return nil, err
 				}
 			}
@@ -108,7 +108,7 @@ func (tb *TransactionBuffer) ApplyOperationsToModel(baseModel model.Model) (mode
 					if _, err := resultModel.RemovePolicy(op.Section, op.PolicyType, oldRule); err != nil {
 						return nil, err
 					}
-					if err := resultModel.AddPolicy(op.Section, op.PolicyType, op.Rules[i]); err != nil {
+					if err := addPolicyIfAbsent(resultModel, op.Section, op.PolicyType, op.Rules[i]); err != nil {
 						return nil, err
 					}
 				}
@@ -117,6 +117,16 @@ func (tb *TransactionBuffer) ApplyOperationsToModel(baseModel model.Model) (mode
 	}
 
 	return resultModel, nil
+}
+
+// addPolicyIfAbsent adds a rule unless the model already has it, since
+// Model.AddPolicy does not check and a duplicate would survive a later removal.
+func addPolicyIfAbsent(m model.Model, sec string, ptype string, rule []string) error {
+	ok, err := m.HasPolicy(sec, ptype, rule)
+	if err != nil || ok {
+		return err
+	}
+	return m.AddPolicy(sec, ptype, rule)
 }
 
 // HasOperations returns true if there are any buffered operations.
