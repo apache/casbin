@@ -296,6 +296,23 @@ This project exists thanks to all the people who contribute.
 
 [![Star History Chart](https://star-history.dera.page/svg?repos=apache/casbin&type=Date)](https://star-history.dera.page/#apache/casbin&Date)
 
+## Citation
+
+If you use Apache Casbin in your research, please cite:
+
+```bibtex
+@article{luo2026casbin,
+  title   = {Casbin: A Graph-Based Approach for Efficient and Verifiable Cloud Authorization},
+  author  = {Luo, Yang and Shen, Qingni and Wu, Zhonghai},
+  journal = {IEEE Transactions on Dependable and Secure Computing},
+  volume  = {23},
+  number  = {5},
+  pages   = {11051--11068},
+  year    = {2026},
+  doi     = {10.1109/TDSC.2026.3709803}
+}
+```
+
 ## License
 
 This project is licensed under the [Apache 2.0 license](LICENSE).
