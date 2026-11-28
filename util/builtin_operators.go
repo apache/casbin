@@ -698,6 +698,9 @@ func GenerateGFunction(rm rbac.RoleManager, useCache bool) govaluate.ExpressionF
 	memorized := sync.Map{}
 	return func(args ...interface{}) (interface{}, error) {
 		// Like all our other govaluate functions, all args are strings.
+		if err := validateVariadicArgs(len(args), args...); err != nil {
+			return false, fmt.Errorf("%s: %w", "g", err)
+		}
 
 		if useCache {
 			// Allocate and generate a cache key from the arguments...
@@ -755,6 +758,9 @@ func GenerateGFunction(rm rbac.RoleManager, useCache bool) govaluate.ExpressionF
 func GenerateConditionalGFunction(crm rbac.ConditionalRoleManager) govaluate.ExpressionFunction {
 	return func(args ...interface{}) (interface{}, error) {
 		// Like all our other govaluate functions, all args are strings.
+		if err := validateVariadicArgs(len(args), args...); err != nil {
+			return false, fmt.Errorf("%s: %w", "g", err)
+		}
 		var hasLink bool
 
 		name1, name2 := args[0].(string), args[1].(string)

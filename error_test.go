@@ -91,6 +91,12 @@ func TestEnforceError(t *testing.T) {
 		t.Log("Test on error: ")
 		t.Log(err.Error())
 	}
+
+	e, _ = NewEnforcer("examples/rbac_model.conf", "examples/rbac_policy.csv")
+	_, err = e.Enforce(42, "data1", "read")
+	if err == nil || err.Error() != "g: argument must be a string" {
+		t.Errorf("Enforce returns %v, supposed to be a g argument error", err)
+	}
 }
 
 func TestNoError(t *testing.T) {
